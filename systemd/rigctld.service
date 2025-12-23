@@ -1,0 +1,15 @@
+[Unit]
+Description=Hamlib rigctld for TS-590
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+ExecStart=/usr/bin/rigctld -m 2031 -r /dev/ttyUSB0 -s 115200 -T 0.0.0.0 -t 4532 -vvv
+StandardOutput=journal
+StandardError=journal
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

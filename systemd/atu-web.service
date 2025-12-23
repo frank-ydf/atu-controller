@@ -1,0 +1,16 @@
+[Unit]
+Description=ATU-100 Web Controller
+After=network.target rigctld.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/atu-controller
+ExecStart=/usr/bin/node /home/pi/atu-controller/server.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
