@@ -271,7 +271,6 @@ MIT License - Vedi file LICENSE
 ## 📮 Contatti
 
 - GitHub: [@frank-ydf](https://github.com/frank-ydf)
-- Callsign: IU1FYF
 
 ---
 
