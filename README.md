@@ -1,39 +1,37 @@
 # ATU-100 Remote Controller
 
-Sistema di controllo remoto via web per ATU-100 Extended (7x7) antenna tuner integrato con Kenwood TS-590.
+Web-based remote control system for ATU-100 Extended (7x7) antenna tuner integrated with Kenwood TS-590 transceiver.
 
-## 🎯 Caratteristiche
+## Features
 
-- ✅ Controllo remoto completo ATU-100 (TUNE, AUTO, BYPASS, RESET)
-- ✅ Interfaccia web responsive con feedback real-time
-- ✅ Integrazione CAT control Kenwood TS-590 via Hamlib
-- ✅ Sequenza tune automatica con carrier FSK/RTTY
-- ✅ **Smart polling** per rilevamento fine tuning
-- ✅ Monitoraggio stato accordatura (RA7)
-- ✅ Tracking modalità AUTO/MANUAL/BYPASS **corretti**
-- ✅ **State persistente** (sopravvive al reboot)
-- ✅ WebSocket per aggiornamenti frequenza/mode/power in tempo reale
+- ✅ Full remote control of ATU-100 (TUNE, AUTO, BYPASS, RESET)
+- ✅ Responsive web interface with real-time feedback
+- ✅ Kenwood TS-590 CAT control via Hamlib
+- ✅ Automatic tune sequence with FSK/RTTY carrier
+- ✅ Smart polling for tune completion detection
+- ✅ Persistent state across reboots
+- ✅ WebSocket real-time updates for frequency/mode/power
 
-## 🔌 Hardware
+## Hardware Requirements
 
-### Componenti
-- Raspberry Pi 3B
+- Raspberry Pi 3B (or newer)
 - ATU-100 Extended (7x7) antenna tuner
 - Kenwood TS-590 transceiver
-- 3× Optoisolatori 4N35
-- Resistori (330Ω, 2.2kΩ, 3.3kΩ)
-- Perfboard
+- 3× 4N35 optoisolators
+- Resistors: 330Ω, 2.2kΩ, 3.3kΩ
+- Perfboard for assembly
 
-### Collegamenti GPIO
+## GPIO Connections
+
 ```
 Raspberry Pi → ATU-100:
-GPIO17 (Pin 11) → Opto1 → ATU RB1 (TUNE/RESET)
-GPIO27 (Pin 13) → Opto2 → ATU RB2 (BYPASS)
-GPIO10 (Pin 19) → Opto3 → ATU RB3 (AUTO)
-GPIO22 (Pin 15) ← Divisore ← ATU RA7 (Tx_req monitor)
+GPIO17 (Pin 11) → Optocoupler 1 → ATU RB1 (TUNE/RESET)
+GPIO27 (Pin 13) → Optocoupler 2 → ATU RB2 (BYPASS)
+GPIO10 (Pin 19) → Optocoupler 3 → ATU RB3 (AUTO)
+GPIO22 (Pin 15) ← Voltage divider ← ATU RA7 (Tx_req monitor)
 GND → ATU GND
 
-Divisore tensione RA7 (5V → 3.3V):
+Voltage Divider for RA7 (5V → 3.3V):
 ATU RA7 (5V) ──[2.2kΩ]──┬── Pi GPIO22
                          │
                      [3.3kΩ]
@@ -41,59 +39,41 @@ ATU RA7 (5V) ──[2.2kΩ]──┬── Pi GPIO22
                         GND
 ```
 
-## 🚀 Installazione
+## Quick Start
 
-### Prerequisiti
+### Prerequisites
+
 ```bash
-# Aggiorna sistema
 sudo apt update && sudo apt upgrade -y
-
-# Installa dipendenze
-sudo apt install -y git vim htop python3-pip python3-venv python3-lgpio \
-                    libhamlib-utils libhamlib-dev libhamlib4 nodejs npm
-
-# Verifica versioni
-node --version  # v20.x.x
-rigctl --version  # Hamlib 4.x
+sudo apt install -y git nodejs npm python3-lgpio \
+                    libhamlib-utils libhamlib-dev libhamlib4
 ```
 
-### Clona Repository
+### Installation
+
 ```bash
+# Clone repository
 cd /home/pi
 git clone https://github.com/frank-ydf/atu-controller.git
 cd atu-controller
-```
 
-### Installa Dipendenze Node.js
-```bash
+# Install Node.js dependencies
 npm install
-```
 
-### **Setup Iniziale** (NUOVO!)
-```bash
-# Esegui setup per configurazione persistente
+# Run setup script
 chmod +x setup.sh
 ./setup.sh
-```
 
-Questo crea:
-- Directory `/var/lib/atu-controller` per state persistente
-- Permessi corretti per user `pi`
-- Riavvia servizi automaticamente
-
-### Configura Servizi Systemd
-```bash
-# Copia file servizi
+# Configure systemd services
 sudo cp systemd/rigctld.service /etc/systemd/system/
 sudo cp systemd/atu-web.service /etc/systemd/system/
-
-# Abilita e avvia servizi
 sudo systemctl daemon-reload
 sudo systemctl enable rigctld atu-web
 sudo systemctl start rigctld atu-web
 ```
 
-### Configura TS-590
+### TS-590 Configuration
+
 ```
 Menu → 1-9 (COM):
 ├─ Baud Rate: 115200
@@ -107,173 +87,181 @@ Menu → 0-9 (Extended):
 └─ TXW: ON
 ```
 
-## 🎮 Utilizzo
+## Usage
 
-### Accedi all'interfaccia web
-```
-http://atupi.local:3000
-```
+### Web Interface
 
-### Comandi da CLI
+Access at: `http://atupi.local:3000`
+
+### Command Line Interface
+
 ```bash
 cd /home/pi/atu-controller
 
-# Status completo
+# Check status
 ./atu_gpio.py status
 
-# Toggle AUTO mode (. ↔ niente)
+# Toggle AUTO mode
 ./atu_gpio.py auto
 
-# Toggle BYPASS mode (_ ↔ off)
+# Toggle BYPASS mode
 ./atu_gpio.py bypass
 
-# Tune manuale
+# Manual tune
 ./atu_gpio.py tune
 
 # Reset ATU (L=0, C=0)
 ./atu_gpio.py reset
 ```
 
-### Simboli Display ATU-100 (✅ CORRETTI)
+### Display Symbols
 
-| Display | Modalità | Comportamento |
-|---------|----------|---------------|
-| **(niente)** | MANUAL | Premi TUNE per accordare |
-| **`.` (dot)** | AUTO | Accorda automaticamente con carrier |
-| **`_`** | BYPASS | Disabilitato (L=0, C=0) |
+| Symbol | Mode | Behavior |
+|--------|------|----------|
+| **(none)** | MANUAL | Press TUNE button to tune |
+| **`.` (dot)** | AUTO | Auto-tune when SWR > 1.3 |
+| **`_`** | BYPASS | ATU disabled (L=0, C=0) |
 
-**Fonte**: User Manual N7DDC pag. 7
+*Reference: N7DDC User Manual page 7*
 
-## 🔄 Aggiornamento
+## Update
 
 ```bash
 cd /home/pi/atu-controller
 ./update.sh
 ```
 
-Lo script:
-- ✅ Controlla modifiche locali non committate
-- ✅ Fa stash automatico se necessario
-- ✅ Scarica aggiornamenti da GitHub
-- ✅ Aggiorna dipendenze Node.js
-- ✅ Riavvia servizi automaticamente
-- ✅ Verifica status servizi
+The update script will:
+- Check for uncommitted local changes
+- Pull latest updates from GitHub
+- Update Node.js dependencies
+- Restart services automatically
+- Verify service status
 
-## 📊 Struttura File
+## API Endpoints
+
+```
+GET  /api/frequency        # Read frequency
+POST /api/frequency        # Set frequency
+GET  /api/mode             # Read mode
+GET  /api/power            # Read power
+POST /api/power            # Set power
+POST /api/tx               # TX ON
+POST /api/rx               # TX OFF
+GET  /api/tx-status        # TX/RX status
+POST /api/tune             # Full tune sequence (with smart polling)
+POST /api/atu/auto         # Toggle AUTO mode
+POST /api/atu/bypass       # Toggle BYPASS mode
+POST /api/atu/reset        # Reset ATU
+GET  /api/atu/status       # Tuning status
+GET  /api/atu/fullstatus   # Complete status with mode
+```
+
+## Project Structure
+
 ```
 atu-controller/
-├── server.js              # Server Node.js + WebSocket + Smart Polling
-├── atu_gpio.py            # Controllo GPIO optoisolatori (FIXED)
-├── package.json           # Dipendenze Node.js
+├── server.js              # Node.js server + WebSocket + Smart polling
+├── atu_gpio.py            # GPIO control via optoisolators
+├── package.json           # Node.js dependencies
 ├── public/
-│   └── index.html         # Interfaccia web (FIXED)
+│   └── index.html         # Web interface
 ├── systemd/
-│   ├── rigctld.service    # Servizio Hamlib
-│   └── atu-web.service    # Servizio web server
-├── setup.sh               # Setup directory persistente (NUOVO!)
-├── update.sh              # Script aggiornamento con safety checks (NUOVO!)
+│   ├── rigctld.service    # Hamlib service
+│   └── atu-web.service    # Web server service
+├── setup.sh               # Initial setup script
+├── update.sh              # Update script with safety checks
 └── README.md
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
-### Server non parte
+### Services not starting
+
 ```bash
-# Verifica logs
+# Check logs
 journalctl -u atu-web -f
 journalctl -u rigctld -f
 
-# Verifica porte
+# Verify ports
 sudo netstat -tulpn | grep 3000  # Web server
 sudo netstat -tulpn | grep 4532  # rigctld
 ```
 
-### Radio non risponde
+### Radio not responding
+
 ```bash
-# Test CAT diretto
+# Test CAT control directly
 telnet localhost 4532
-f          # Leggi frequenza
-q          # Esci
+f          # Read frequency
+q          # Quit
 ```
 
-### GPIO non funzionano
+### GPIO not working
+
 ```bash
-# Test singolo comando
+# Test single command
 ./atu_gpio.py status
 
-# Verifica permissions
+# Check permissions
 ls -l /dev/gpiomem
 ```
 
-### State file non persiste
+### State file not persisting
+
 ```bash
-# Verifica directory esistente
+# Verify directory exists
 ls -la /var/lib/atu-controller
 
-# Se non esiste, esegui setup
+# If missing, run setup
 ./setup.sh
 
-# Verifica contenuto
+# Check content
 cat /var/lib/atu-controller/state.txt
-# Output atteso: MANUAL,NORMAL  (o AUTO,NORMAL / MANUAL,BYPASS)
 ```
 
-## 📝 API Endpoints
-```
-GET  /api/frequency        # Leggi frequenza
-POST /api/frequency        # Imposta frequenza
-GET  /api/mode             # Leggi mode
-GET  /api/power            # Leggi potenza
-POST /api/power            # Imposta potenza
-POST /api/tx               # TX ON
-POST /api/rx               # TX OFF
-GET  /api/tx-status        # Stato TX/RX
-POST /api/tune             # Sequenza tune completa (con smart polling)
-POST /api/atu/auto         # Toggle AUTO
-POST /api/atu/bypass       # Toggle BYPASS
-POST /api/atu/reset        # Reset ATU
-GET  /api/atu/status       # Stato tuning
-GET  /api/atu/fullstatus   # Stato completo con modalità (FIXED)
-```
+## What's New in v1.1
 
-## 🆕 Novità v1.1
+### Critical Fixes
+- **Display logic corrected**: Dot = AUTO, nothing = MANUAL (was inverted)
+- **Persistent state**: State file now saved in `/var/lib/` instead of `/tmp/`
+- **Smart polling**: Tune no longer interrupted prematurely
+- **Safety checks**: `update.sh` verifies local changes before updating
 
-### ✅ Fix Critici
-- **Display logic corretta**: Dot = AUTO, niente = MANUAL (era invertito!)
-- **State persistente**: File salvato in `/var/lib/` invece di `/tmp/`
-- **Smart polling**: Tune non viene più interrotto prematuramente
-- **Safety checks**: `update.sh` verifica modifiche locali prima di aggiornare
+### Improvements
+- Tune timeout increased to 30 seconds (was 20s fixed delay)
+- Polling every 500ms instead of fixed 1s delay
+- Improved emergency cleanup on errors
+- Automatic setup of persistent directory
 
-### 🚀 Miglioramenti
-- Timeout tune aumentato a 30 secondi (era 20s fisso con delay)
-- Polling ogni 500ms invece di delay fisso 1s
-- Emergency cleanup migliorato in caso errori
-- Setup automatico directory persistente
+## Security Warning
 
-## 🔐 Sicurezza
+**This interface has NO authentication.**
 
-**ATTENZIONE:** Questa interfaccia NON ha autenticazione. 
+For public network use, add:
+- Firewall to limit access
+- Reverse proxy with authentication (nginx + basic auth)
+- VPN for secure remote access
 
-Per uso su rete pubblica, aggiungi:
-- Firewall per limitare accesso
-- Reverse proxy con autenticazione (nginx + basic auth)
-- VPN per accesso remoto sicuro
+## License
 
-## 📄 Licenza
+MIT License - See LICENSE file
 
-MIT License - Vedi file LICENSE
-
-## 🙏 Crediti
+## Credits
 
 - ATU-100 firmware: [N7DDC/Dfinitski](https://github.com/Dfinitski/N7DDC-ATU-100-mini-and-extended-boards)
 - Hamlib: [Hamlib Project](https://hamlib.github.io/)
 
-## 📮 Contatti
+## Author
 
 - GitHub: [@frank-ydf](https://github.com/frank-ydf)
+- Callsign: IU0AVT
+
+## Support
+
+For issues and feature requests, please use [GitHub Issues](https://github.com/frank-ydf/atu-controller/issues).
 
 ---
 
-**73 de IU1FYF** 📻
 
-*Versione 1.1 - Display Logic Fixed - 2025-12-23*
+*Version 1.1 - Display Logic Fixed - December 2025*
