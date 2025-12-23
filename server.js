@@ -64,28 +64,38 @@ function rigCommand(cmd) {
   });
 }
 
-// Helper: comando Kenwood diretto
-function kenwoodCommand(cmd) {
-  return new Promise((resolve, reject) => {
-    if (!rigSocket) {
-      return reject(new Error('Rig not connected'));
-    }
+// ============================================================================
+// HELPER: Smart Polling per Tune Completion
+// ============================================================================
+
+async function waitTuneComplete(maxTimeoutSec = 30) {
+  return new Promise((resolve) => {
+    let elapsed = 0;
+    const interval = 500; // Check ogni 500ms
     
-    let timeoutId = setTimeout(() => {
-      rigSocket.removeListener('data', onData);
-      reject(new Error('Timeout'));
-    }, 2000);
-    
-    function onData() {
-      clearTimeout(timeoutId);
-      rigSocket.removeListener('data', onData);
-      resolve();
-    }
-    
-    rigSocket.once('data', onData);
-    rigSocket.write(cmd + '\n');
+    const checkStatus = setInterval(() => {
+      exec('/home/pi/atu-controller/atu_gpio.py status', (err, stdout) => {
+        elapsed += interval;
+        
+        if (err || elapsed >= maxTimeoutSec * 1000) {
+          clearInterval(checkStatus);
+          resolve(false); // Timeout o errore
+          return;
+        }
+        
+        // Check if tuning completed
+        if (!stdout.includes('TUNING')) {
+          clearInterval(checkStatus);
+          resolve(true); // Tune completato!
+        }
+      });
+    }, interval);
   });
 }
+
+// ============================================================================
+// API ENDPOINTS
+// ============================================================================
 
 // API: Get frequency
 app.get('/api/frequency', async (req, res) => {
@@ -171,7 +181,10 @@ app.get('/api/tx-status', async (req, res) => {
   }
 });
 
-// API: ATU commands
+// ============================================================================
+// ATU CONTROL ENDPOINTS
+// ============================================================================
+
 app.post('/api/atu/auto', (req, res) => {
   exec('/home/pi/atu-controller/atu_gpio.py auto', (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -211,7 +224,7 @@ app.get('/api/atu/status', (req, res) => {
   });
 });
 
-// API: Get ATU full state (LOGICA CORRETTA)
+// API: Get ATU full state (✅ LOGICA CORRETTA)
 app.get('/api/atu/fullstatus', (req, res) => {
   exec('/home/pi/atu-controller/atu_gpio.py state', (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -228,14 +241,17 @@ app.get('/api/atu/fullstatus', (req, res) => {
     exec('/home/pi/atu-controller/atu_gpio.py status', (err2, stdout2) => {
       const isTuning = stdout2 ? stdout2.includes('TUNING') : false;
       
-      // LOGICA CORRETTA DISPLAY
+      // ✅ LOGICA CORRETTA DISPLAY (dal manuale N7DDC)
+      // DOT (.) = AUTO mode
+      // NOTHING ( ) = MANUAL mode  
+      // UNDERSCORE (_) = BYPASS mode
       let displaySymbol;
       if (bypassMode) {
         displaySymbol = '_';  // Bypass
       } else if (autoMode) {
-        displaySymbol = ' ';  // Auto (niente)
+        displaySymbol = '.';  // Auto (DOT)
       } else {
-        displaySymbol = '.';  // Manuale (punto)
+        displaySymbol = ' ';  // Manual (NIENTE)
       }
       
       res.json({
@@ -249,7 +265,7 @@ app.get('/api/atu/fullstatus', (req, res) => {
   });
 });
 
-// API: Full tune sequence (CON FSK/RTTY CARRIER)
+// API: Full tune sequence (✅ CON SMART POLLING)
 app.post('/api/tune', async (req, res) => {
   console.log('🎯 Starting tune sequence...');
   
@@ -288,21 +304,18 @@ app.post('/api/tune', async (req, res) => {
       });
     });
     
-// 6. Trigger ATU tune
-console.log('🎛️ Triggering ATU...');
-await new Promise((resolve, reject) => {
-  exec('/home/pi/atu-controller/atu_gpio.py tune', (err, stdout) => {
-    console.log('ATU:', stdout);
-    if (err) reject(err);
-    else resolve();
-  });
-});
-
-// AGGIUNGI QUESTO: Aspetta che il pulse finisca completamente
-await new Promise(r => setTimeout(r, 1000)); // 1 secondo di pausa
-
-// 7. Aspetta tune (max 20s)
-console.log('⏳ Waiting for tune...');
+    // AGGIUNGI QUESTO: Aspetta che il pulse finisca completamente
+    await new Promise(r => setTimeout(r, 1000)); // 1 secondo di pausa
+    
+    // 6. ✅ SMART POLLING - Aspetta tune (max 30s)
+    console.log('⏳ Waiting for tune completion (smart polling)...');
+    const tuned = await waitTuneComplete(30);
+    
+    if (tuned) {
+      console.log('✅ Tune completed successfully');
+    } else {
+      console.log('⚠️ Tune timeout - may need manual check');
+    }
     
     // 7. TX OFF
     console.log('📻 TX OFF');
@@ -346,7 +359,10 @@ console.log('⏳ Waiting for tune...');
   }
 });
 
-// WebSocket updates
+// ============================================================================
+// WEBSOCKET UPDATES
+// ============================================================================
+
 io.on('connection', (socket) => {
   console.log('📱 Client connected');
   
@@ -376,6 +392,10 @@ io.on('connection', (socket) => {
     clearInterval(interval);
   });
 });
+
+// ============================================================================
+// SERVER START
+// ============================================================================
 
 const PORT = 3000;
 server.listen(PORT, '0.0.0.0', () => {

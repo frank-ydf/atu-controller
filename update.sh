@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# ATU Controller - Update Script
-# Aggiorna il sistema dal repository GitHub
+# ATU Controller - Update Script (IMPROVED)
+# Aggiorna il sistema dal repository GitHub con safety checks
 #
 
 set -e  # Exit on error
@@ -22,18 +22,37 @@ if [ ! -f "server.js" ]; then
     exit 1
 fi
 
-# Stash any local changes
-echo -e "${YELLOW}📦 Saving local changes...${NC}"
-git stash
+# Check for uncommitted changes
+if [ -n "$(git status --porcelain)" ]; then
+    echo -e "${YELLOW}⚠️  Warning: You have uncommitted local changes!${NC}"
+    echo ""
+    git status --short
+    echo ""
+    read -p "Stash changes and continue? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${RED}❌ Update cancelled${NC}"
+        exit 1
+    fi
+    
+    # Stash local changes
+    echo -e "${YELLOW}📦 Stashing local changes...${NC}"
+    git stash
+fi
 
 # Pull latest changes
 echo -e "${YELLOW}⬇️  Pulling latest changes from GitHub...${NC}"
 git pull origin main
 
-# Restore local changes if any
+# Restore stashed changes if any
 if git stash list | grep -q stash; then
     echo -e "${YELLOW}📤 Restoring local changes...${NC}"
-    git stash pop || true
+    git stash pop || {
+        echo -e "${RED}❌ Merge conflict! Fix manually with:${NC}"
+        echo "   git status"
+        echo "   git stash drop  # to discard stashed changes"
+        exit 1
+    }
 fi
 
 # Install/update Node dependencies
@@ -46,14 +65,19 @@ fi
 echo -e "${YELLOW}🔧 Setting permissions...${NC}"
 chmod +x atu_gpio.py
 chmod +x update.sh
+[ -f "setup.sh" ] && chmod +x setup.sh
 
-# Restart services
-echo -e "${YELLOW}🔄 Restarting services...${NC}"
-sudo systemctl restart atu-web
-sudo systemctl restart rigctld
-
-# Wait for services to start
-sleep 2
+# Run setup if setup.sh exists and state directory doesn't
+if [ -f "setup.sh" ] && [ ! -d "/var/lib/atu-controller" ]; then
+    echo -e "${YELLOW}🔧 Running first-time setup...${NC}"
+    ./setup.sh
+else
+    # Just restart services
+    echo -e "${YELLOW}🔄 Restarting services...${NC}"
+    sudo systemctl restart atu-web
+    sudo systemctl restart rigctld
+    sleep 2
+fi
 
 # Check service status
 echo ""
@@ -62,6 +86,7 @@ if systemctl is-active --quiet atu-web; then
     echo -e "${GREEN}✅ atu-web: running${NC}"
 else
     echo -e "${RED}❌ atu-web: stopped${NC}"
+    echo -e "${YELLOW}   Recent logs:${NC}"
     journalctl -u atu-web -n 10 --no-pager
 fi
 
@@ -69,6 +94,7 @@ if systemctl is-active --quiet rigctld; then
     echo -e "${GREEN}✅ rigctld: running${NC}"
 else
     echo -e "${RED}❌ rigctld: stopped${NC}"
+    echo -e "${YELLOW}   Recent logs:${NC}"
     journalctl -u rigctld -n 10 --no-pager
 fi
 
@@ -77,6 +103,12 @@ echo -e "${GREEN}✅ Update complete!${NC}"
 echo ""
 echo "Access interface at: http://atupi.local:3000"
 echo ""
+echo "Quick tests:"
+echo "  ./atu_gpio.py status"
+echo "  ./atu_gpio.py auto"
+echo "  curl http://localhost:3000/api/atu/fullstatus"
+echo ""
 echo "To view logs:"
 echo "  journalctl -u atu-web -f"
 echo "  journalctl -u rigctld -f"
+echo ""
