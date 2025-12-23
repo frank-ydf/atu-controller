@@ -233,7 +233,7 @@
         <span id="atu-status">Ready</span>
       </div>
       
-      <!-- NUOVO: Stati modalità -->
+      <!-- Stati modalità -->
       <div class="info-grid">
         <div class="info-item">
           <div class="label">Display</div>
@@ -337,47 +337,59 @@
         now.getSeconds().toString().padStart(2,'0');
     });
     
-// Update ATU status con modalità (LOGICA CORRETTA)
-async function updateATUStatus() {
-  try {
-    const res = await fetch('/api/atu/fullstatus');
-    const data = await res.json();
-    
-    const indicator = document.getElementById('atu-indicator');
-    const statusText = document.getElementById('atu-status');
-    const displaySymbol = document.getElementById('atu-display');
-    const autoMode = document.getElementById('atu-auto-mode');
-    const bypassMode = document.getElementById('atu-bypass-mode');
-    
-    // Tuning status
-    if (data.tuning) {
-      indicator.className = 'status-indicator tuning';
-      statusText.textContent = 'Tuning...';
-    } else {
-      indicator.className = 'status-indicator ready';
-      statusText.textContent = 'Ready';
+    // Update ATU status con modalità (✅ LOGICA CORRETTA)
+    async function updateATUStatus() {
+      try {
+        const res = await fetch('/api/atu/fullstatus');
+        const data = await res.json();
+        
+        const indicator = document.getElementById('atu-indicator');
+        const statusText = document.getElementById('atu-status');
+        const displaySymbol = document.getElementById('atu-display');
+        const autoMode = document.getElementById('atu-auto-mode');
+        const bypassMode = document.getElementById('atu-bypass-mode');
+        
+        // Tuning status
+        if (data.tuning) {
+          indicator.className = 'status-indicator tuning';
+          statusText.textContent = 'Tuning...';
+        } else {
+          indicator.className = 'status-indicator ready';
+          statusText.textContent = 'Ready';
+        }
+        
+        // ✅ Display symbol CORRETTO (dal manuale N7DDC)
+        // DOT (.) = AUTO mode
+        // NOTHING ( ) = MANUAL mode
+        // UNDERSCORE (_) = BYPASS mode
+        if (data.display === ' ') {
+          // Manual mode - niente simbolo
+          displaySymbol.textContent = '(none)';
+          displaySymbol.style.fontSize = '1em';
+          displaySymbol.style.color = '#fff';
+        } else if (data.display === '.') {
+          // Auto mode - dot
+          displaySymbol.textContent = '.';
+          displaySymbol.style.fontSize = '4em';
+          displaySymbol.style.color = '#4ade80'; // Verde
+        } else if (data.display === '_') {
+          // Bypass mode - underscore
+          displaySymbol.textContent = '_';
+          displaySymbol.style.fontSize = '3em';
+          displaySymbol.style.color = '#fb923c'; // Arancione
+        }
+        
+        // Mode text
+        autoMode.textContent = data.auto ? 'ON' : 'OFF';
+        autoMode.style.color = data.auto ? '#4ade80' : '#fff';
+        
+        bypassMode.textContent = data.bypass ? 'ON' : 'OFF';
+        bypassMode.style.color = data.bypass ? '#fb923c' : '#fff';
+        
+      } catch (err) {
+        console.error('Error updating ATU status:', err);
+      }
     }
-    
-    // Display symbol (corretto!)
-    if (data.display === ' ') {
-      displaySymbol.textContent = '(none)';
-      displaySymbol.style.fontSize = '1em';
-    } else {
-      displaySymbol.textContent = data.display;
-      displaySymbol.style.fontSize = '2em';
-    }
-    
-    // Mode text
-    autoMode.textContent = data.auto ? 'ON' : 'OFF';
-    autoMode.style.color = data.auto ? '#4ade80' : '#fff';
-    
-    bypassMode.textContent = data.bypass ? 'ON' : 'OFF';
-    bypassMode.style.color = data.bypass ? '#fb923c' : '#fff';
-    
-  } catch (err) {
-    console.error('Error updating ATU status:', err);
-  }
-}
     
     // Tune button
     async function tuneAuto() {
