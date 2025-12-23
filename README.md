@@ -213,7 +213,7 @@ MIT License - Vedi file LICENSE
 
 ## 🙏 Crediti
 
-- ATU-100 firmware: [N7DDC/Dfinitski](https://github.com/Dfinitski/ATU-100-mini-and-extended-boards)
+- ATU-100 firmware: [N7DDC/Dfinitski](https://github.com/Dfinitski/N7DDC-ATU-100-mini-and-extended-boards)
 - Hamlib: [Hamlib Project](https://hamlib.github.io/)
 
 ## 📮 Contatti
