@@ -8,8 +8,10 @@ Sistema di controllo remoto via web per ATU-100 Extended (7x7) antenna tuner int
 - ✅ Interfaccia web responsive con feedback real-time
 - ✅ Integrazione CAT control Kenwood TS-590 via Hamlib
 - ✅ Sequenza tune automatica con carrier FSK/RTTY
+- ✅ **Smart polling** per rilevamento fine tuning
 - ✅ Monitoraggio stato accordatura (RA7)
-- ✅ Tracking modalità AUTO/MANUAL/BYPASS
+- ✅ Tracking modalità AUTO/MANUAL/BYPASS **corretti**
+- ✅ **State persistente** (sopravvive al reboot)
 - ✅ WebSocket per aggiornamenti frequenza/mode/power in tempo reale
 
 ## 🔌 Hardware
@@ -58,7 +60,7 @@ rigctl --version  # Hamlib 4.x
 ### Clona Repository
 ```bash
 cd /home/pi
-git clone https://github.com/TUO_USERNAME/atu-controller.git
+git clone https://github.com/frank-ydf/atu-controller.git
 cd atu-controller
 ```
 
@@ -66,6 +68,18 @@ cd atu-controller
 ```bash
 npm install
 ```
+
+### **Setup Iniziale** (NUOVO!)
+```bash
+# Esegui setup per configurazione persistente
+chmod +x setup.sh
+./setup.sh
+```
+
+Questo crea:
+- Directory `/var/lib/atu-controller` per state persistente
+- Permessi corretti per user `pi`
+- Riavvia servizi automaticamente
 
 ### Configura Servizi Systemd
 ```bash
@@ -120,33 +134,44 @@ cd /home/pi/atu-controller
 ./atu_gpio.py reset
 ```
 
-### Simboli Display ATU-100
+### Simboli Display ATU-100 (✅ CORRETTI)
 
 | Display | Modalità | Comportamento |
 |---------|----------|---------------|
-| **(niente)** | MANUALE | Premi TUNE per accordare |
-| **`.`** | AUTO | Accorda automaticamente con carrier |
+| **(niente)** | MANUAL | Premi TUNE per accordare |
+| **`.` (dot)** | AUTO | Accorda automaticamente con carrier |
 | **`_`** | BYPASS | Disabilitato (L=0, C=0) |
 
+**Fonte**: User Manual N7DDC pag. 7
+
 ## 🔄 Aggiornamento
+
 ```bash
 cd /home/pi/atu-controller
 ./update.sh
 ```
 
+Lo script:
+- ✅ Controlla modifiche locali non committate
+- ✅ Fa stash automatico se necessario
+- ✅ Scarica aggiornamenti da GitHub
+- ✅ Aggiorna dipendenze Node.js
+- ✅ Riavvia servizi automaticamente
+- ✅ Verifica status servizi
+
 ## 📊 Struttura File
 ```
 atu-controller/
-├── server.js              # Server Node.js + WebSocket
-├── atu_gpio.py            # Controllo GPIO optoisolatori
-├── atu_display.py         # Lettura stato display
+├── server.js              # Server Node.js + WebSocket + Smart Polling
+├── atu_gpio.py            # Controllo GPIO optoisolatori (FIXED)
 ├── package.json           # Dipendenze Node.js
 ├── public/
-│   └── index.html         # Interfaccia web
+│   └── index.html         # Interfaccia web (FIXED)
 ├── systemd/
 │   ├── rigctld.service    # Servizio Hamlib
 │   └── atu-web.service    # Servizio web server
-├── update.sh              # Script aggiornamento rapido
+├── setup.sh               # Setup directory persistente (NUOVO!)
+├── update.sh              # Script aggiornamento con safety checks (NUOVO!)
 └── README.md
 ```
 
@@ -180,6 +205,19 @@ q          # Esci
 ls -l /dev/gpiomem
 ```
 
+### State file non persiste
+```bash
+# Verifica directory esistente
+ls -la /var/lib/atu-controller
+
+# Se non esiste, esegui setup
+./setup.sh
+
+# Verifica contenuto
+cat /var/lib/atu-controller/state.txt
+# Output atteso: MANUAL,NORMAL  (o AUTO,NORMAL / MANUAL,BYPASS)
+```
+
 ## 📝 API Endpoints
 ```
 GET  /api/frequency        # Leggi frequenza
@@ -190,13 +228,27 @@ POST /api/power            # Imposta potenza
 POST /api/tx               # TX ON
 POST /api/rx               # TX OFF
 GET  /api/tx-status        # Stato TX/RX
-POST /api/tune             # Sequenza tune completa
+POST /api/tune             # Sequenza tune completa (con smart polling)
 POST /api/atu/auto         # Toggle AUTO
 POST /api/atu/bypass       # Toggle BYPASS
 POST /api/atu/reset        # Reset ATU
 GET  /api/atu/status       # Stato tuning
-GET  /api/atu/fullstatus   # Stato completo con modalità
+GET  /api/atu/fullstatus   # Stato completo con modalità (FIXED)
 ```
+
+## 🆕 Novità v1.1
+
+### ✅ Fix Critici
+- **Display logic corretta**: Dot = AUTO, niente = MANUAL (era invertito!)
+- **State persistente**: File salvato in `/var/lib/` invece di `/tmp/`
+- **Smart polling**: Tune non viene più interrotto prematuramente
+- **Safety checks**: `update.sh` verifica modifiche locali prima di aggiornare
+
+### 🚀 Miglioramenti
+- Timeout tune aumentato a 30 secondi (era 20s fisso con delay)
+- Polling ogni 500ms invece di delay fisso 1s
+- Emergency cleanup migliorato in caso errori
+- Setup automatico directory persistente
 
 ## 🔐 Sicurezza
 
@@ -219,3 +271,10 @@ MIT License - Vedi file LICENSE
 ## 📮 Contatti
 
 - GitHub: [@frank-ydf](https://github.com/frank-ydf)
+- Callsign: IU1FYF
+
+---
+
+**73 de IU1FYF** 📻
+
+*Versione 1.1 - Display Logic Fixed - 2025-12-23*
