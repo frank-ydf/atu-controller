@@ -1,7 +1,7 @@
 {
   "name": "atu-controller",
-  "version": "1.0.0",
-  "description": "Remote control system for ATU-100 antenna tuner with Kenwood TS-590",
+  "version": "2.0.0",
+  "description": "Remote control system for ATU-100 antenna tuner with Kenwood TS-590 v2.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -13,9 +13,10 @@
     "atu-100",
     "kenwood",
     "ts-590",
-    "raspberry-pi"
+    "raspberry-pi",
+    "remote-control"
   ],
-  "author": "Your Name",
+  "author": "Frank (IU1FYF)",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",

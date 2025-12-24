@@ -1,37 +1,52 @@
-# ATU-100 Remote Controller
+# ATU-100 Remote Controller v2.0
 
-Web-based remote control system for ATU-100 Extended (7x7) antenna tuner integrated with Kenwood TS-590 transceiver.
+Sistema di controllo remoto via web per ATU-100 Extended (7x7) antenna tuner integrato con Kenwood TS-590.
 
-## Features
+## 🎯 Novità v2.0
 
-- ✅ Full remote control of ATU-100 (TUNE, AUTO, BYPASS, RESET)
-- ✅ Responsive web interface with real-time feedback
-- ✅ Kenwood TS-590 CAT control via Hamlib
-- ✅ Automatic tune sequence with FSK/RTTY carrier
-- ✅ Smart polling for tune completion detection
-- ✅ Persistent state across reboots
-- ✅ WebSocket real-time updates for frequency/mode/power
+- ✅ **Preset Tune**: 3 pulsanti con frequenze preimpostate (160m, 80m, 40m)
+- ✅ **SWR Reading**: Lettura SWR via CAT durante tuning
+- ✅ **Binary Toggle**: BYPASS ⟷ AUTO (eliminata modalità MANUAL)
+- ✅ **Emergency Stop**: Pulsante TX stop di emergenza
+- ✅ **Antenna Matrix**: Switch 2×2 (VERTICAL/LONG WIRE + 590/SDR)
+- ✅ **Layout ottimizzato**: Design 2-colonne più compatto e professionale
 
-## Hardware Requirements
+## 📷 Features v2.0
 
-- Raspberry Pi 3B (or newer)
+### Interfaccia Web
+- **Layout 2 colonne**: TS-590 compatto (30%) + ATU panel largo (70%)
+- **Preset Tune Buttons**: 1830, 3650, 7100 kHz con auto-frequency switching
+- **SWR Display**: Lettura real-time durante tuning, visualizzazione permanente
+- **Mode Toggle**: Switch visuale BYPASS ⟷ AUTO
+- **Emergency Stop**: Interruzione immediata TX in caso di problemi
+- **Antenna Switch Matrix**: 2×2 grid per selezione antenna e radio
+
+### Backend
+- **Frequency-based tuning**: Imposta freq → tune → ripristina freq originale
+- **SWR CAT reading**: Comando Hamlib `get_level SWR`
+- **Smart tune polling**: Verifica completamento accordatura
+- **Emergency cleanup**: Ripristino automatico in caso di errori
+
+## 🔌 Hardware
+
+### Componenti
+- Raspberry Pi 3B
 - ATU-100 Extended (7x7) antenna tuner
 - Kenwood TS-590 transceiver
-- 3× 4N35 optoisolators
-- Resistors: 330Ω, 2.2kΩ, 3.3kΩ
-- Perfboard for assembly
+- 3× Optoisolatori 4N35
+- Resistori (330Ω, 2.2kΩ, 3.3kΩ)
+- Perfboard
 
-## GPIO Connections
-
+### Collegamenti GPIO
 ```
 Raspberry Pi → ATU-100:
-GPIO17 (Pin 11) → Optocoupler 1 → ATU RB1 (TUNE/RESET)
-GPIO27 (Pin 13) → Optocoupler 2 → ATU RB2 (BYPASS)
-GPIO10 (Pin 19) → Optocoupler 3 → ATU RB3 (AUTO)
-GPIO22 (Pin 15) ← Voltage divider ← ATU RA7 (Tx_req monitor)
+GPIO17 (Pin 11) → Opto1 → ATU RB1 (TUNE/RESET)
+GPIO27 (Pin 13) → Opto2 → ATU RB2 (BYPASS)
+GPIO10 (Pin 19) → Opto3 → ATU RB3 (AUTO)
+GPIO22 (Pin 15) ← Divisore ← ATU RA7 (Tx_req monitor)
 GND → ATU GND
 
-Voltage Divider for RA7 (5V → 3.3V):
+Divisore tensione RA7 (5V → 3.3V):
 ATU RA7 (5V) ──[2.2kΩ]──┬── Pi GPIO22
                          │
                      [3.3kΩ]
@@ -39,41 +54,47 @@ ATU RA7 (5V) ──[2.2kΩ]──┬── Pi GPIO22
                         GND
 ```
 
-## Quick Start
+## 🚀 Installazione
 
-### Prerequisites
-
+### Prerequisiti
 ```bash
+# Aggiorna sistema
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git nodejs npm python3-lgpio \
-                    libhamlib-utils libhamlib-dev libhamlib4
+
+# Installa dipendenze
+sudo apt install -y git vim htop python3-pip python3-venv python3-lgpio \
+                    libhamlib-utils libhamlib-dev libhamlib4 nodejs npm
+
+# Verifica versioni
+node --version  # v20.x.x
+rigctl --version  # Hamlib 4.x
 ```
 
-### Installation
-
+### Clona Repository
 ```bash
-# Clone repository
 cd /home/pi
 git clone https://github.com/frank-ydf/atu-controller.git
 cd atu-controller
+```
 
-# Install Node.js dependencies
+### Installa Dipendenze Node.js
+```bash
 npm install
+```
 
-# Run setup script
-chmod +x setup.sh
-./setup.sh
-
-# Configure systemd services
+### Configura Servizi Systemd
+```bash
+# Copia file servizi
 sudo cp systemd/rigctld.service /etc/systemd/system/
 sudo cp systemd/atu-web.service /etc/systemd/system/
+
+# Abilita e avvia servizi
 sudo systemctl daemon-reload
 sudo systemctl enable rigctld atu-web
 sudo systemctl start rigctld atu-web
 ```
 
-### TS-590 Configuration
-
+### Configura TS-590
 ```
 Menu → 1-9 (COM):
 ├─ Baud Rate: 115200
@@ -87,181 +108,194 @@ Menu → 0-9 (Extended):
 └─ TXW: ON
 ```
 
-## Usage
+## 🎮 Utilizzo
 
-### Web Interface
+### Accedi all'interfaccia web
+```
+http://atupi.local:3000
+```
 
-Access at: `http://atupi.local:3000`
+### Preset Tune (v2.0)
+1. Click su uno dei 3 preset buttons (160m, 80m, 40m)
+2. Conferma operazione
+3. Sistema automaticamente:
+   - Salva frequenza/mode/power correnti
+   - Imposta frequenza preset
+   - Passa a FSK mode @ 10W
+   - Trasmette carrier per tuning
+   - Legge SWR finale
+   - Ripristina configurazione originale
 
-### Command Line Interface
+### Emergency Stop
+- Pulsante **🛑 EMERGENCY STOP TX** nel box TS-590
+- Interrompe immediatamente la trasmissione
+- Sicurezza in caso di problemi durante tuning
 
+### BYPASS/AUTO Toggle
+- **BYPASS**: ATU disabilitato (L=0, C=0)
+- **AUTO**: ATU in modalità automatica
+- Click sullo switch per toggle istantaneo
+
+### Comandi da CLI
 ```bash
 cd /home/pi/atu-controller
 
-# Check status
+# Status completo
 ./atu_gpio.py status
 
-# Toggle AUTO mode
+# Toggle BYPASS/AUTO
 ./atu_gpio.py auto
 
-# Toggle BYPASS mode
-./atu_gpio.py bypass
-
-# Manual tune
+# Tune manuale
 ./atu_gpio.py tune
 
 # Reset ATU (L=0, C=0)
 ./atu_gpio.py reset
 ```
 
-### Display Symbols
-
-| Symbol | Mode | Behavior |
-|--------|------|----------|
-| **(none)** | MANUAL | Press TUNE button to tune |
-| **`.` (dot)** | AUTO | Auto-tune when SWR > 1.3 |
-| **`_`** | BYPASS | ATU disabled (L=0, C=0) |
-
-*Reference: N7DDC User Manual page 7*
-
-## Update
-
+## 🔄 Aggiornamento
 ```bash
 cd /home/pi/atu-controller
-./update.sh
+git pull origin main
+npm install
+sudo systemctl restart atu-web rigctld
 ```
 
-The update script will:
-- Check for uncommitted local changes
-- Pull latest updates from GitHub
-- Update Node.js dependencies
-- Restart services automatically
-- Verify service status
-
-## API Endpoints
-
-```
-GET  /api/frequency        # Read frequency
-POST /api/frequency        # Set frequency
-GET  /api/mode             # Read mode
-GET  /api/power            # Read power
-POST /api/power            # Set power
-POST /api/tx               # TX ON
-POST /api/rx               # TX OFF
-GET  /api/tx-status        # TX/RX status
-POST /api/tune             # Full tune sequence (with smart polling)
-POST /api/atu/auto         # Toggle AUTO mode
-POST /api/atu/bypass       # Toggle BYPASS mode
-POST /api/atu/reset        # Reset ATU
-GET  /api/atu/status       # Tuning status
-GET  /api/atu/fullstatus   # Complete status with mode
-```
-
-## Project Structure
-
+## 📊 Struttura File
 ```
 atu-controller/
-├── server.js              # Node.js server + WebSocket + Smart polling
-├── atu_gpio.py            # GPIO control via optoisolators
-├── package.json           # Node.js dependencies
+├── server.js              # Server Node.js + WebSocket + API v2.0
+├── atu_gpio.py            # GPIO control + binary toggle v2.0
+├── package.json           # Dependencies (v2.0.0)
 ├── public/
-│   └── index.html         # Web interface
+│   └── index.html         # Web interface v2.0 (2-column layout)
 ├── systemd/
 │   ├── rigctld.service    # Hamlib service
-│   └── atu-web.service    # Web server service
-├── setup.sh               # Initial setup script
-├── update.sh              # Update script with safety checks
-└── README.md
+│   └── atu-web.service    # Web server service v2.0
+├── .gitignore
+└── README.md              # This file
 ```
 
-## Troubleshooting
+## 🐛 Troubleshooting
 
-### Services not starting
-
+### Server non parte
 ```bash
-# Check logs
+# Verifica logs
 journalctl -u atu-web -f
 journalctl -u rigctld -f
 
-# Verify ports
+# Verifica porte
 sudo netstat -tulpn | grep 3000  # Web server
 sudo netstat -tulpn | grep 4532  # rigctld
 ```
 
-### Radio not responding
-
+### Radio non risponde
 ```bash
-# Test CAT control directly
+# Test CAT diretto
 telnet localhost 4532
-f          # Read frequency
-q          # Quit
+f          # Leggi frequenza
+l SWR      # Leggi SWR
+q          # Esci
 ```
 
-### GPIO not working
-
+### GPIO non funzionano
 ```bash
-# Test single command
+# Test singolo comando
 ./atu_gpio.py status
 
-# Check permissions
+# Verifica permissions
 ls -l /dev/gpiomem
 ```
 
-### State file not persisting
-
+### SWR non viene letto
 ```bash
-# Verify directory exists
-ls -la /var/lib/atu-controller
+# Verifica supporto Hamlib
+rigctl -m 2031 -r /dev/ttyUSB0 -s 115200 l SWR
 
-# If missing, run setup
-./setup.sh
-
-# Check content
-cat /var/lib/atu-controller/state.txt
+# Se ritorna 0.0 o errore, il TS-590 potrebbe non supportare
+# il comando SWR via CAT. Verificare firmware radio.
 ```
 
-## What's New in v1.1
+## 📝 API Endpoints v2.0
 
-### Critical Fixes
-- **Display logic corrected**: Dot = AUTO, nothing = MANUAL (was inverted)
-- **Persistent state**: State file now saved in `/var/lib/` instead of `/tmp/`
-- **Smart polling**: Tune no longer interrupted prematurely
-- **Safety checks**: `update.sh` verifies local changes before updating
+### Radio Control
+```
+GET  /api/frequency        # Leggi frequenza
+POST /api/frequency        # Imposta frequenza
+GET  /api/power            # Leggi potenza
+POST /api/power            # Imposta potenza
+POST /api/tx               # TX ON
+POST /api/rx               # TX OFF (Emergency stop)
+GET  /api/tx-status        # Stato TX/RX
+```
 
-### Improvements
-- Tune timeout increased to 30 seconds (was 20s fixed delay)
-- Polling every 500ms instead of fixed 1s delay
-- Improved emergency cleanup on errors
-- Automatic setup of persistent directory
+### ATU Control
+```
+POST /api/tune             # Tune con freq preset (body: {frequency: Hz})
+POST /api/atu/toggle-mode  # Toggle BYPASS ⟷ AUTO (v2.0)
+POST /api/atu/bypass       # Toggle BYPASS (legacy)
+POST /api/atu/reset        # Reset ATU (L=0, C=0)
+GET  /api/atu/status       # Stato tuning
+GET  /api/atu/fullstatus   # Stato completo con modalità
+```
 
-## Security Warning
+### Example: Tune con preset
+```bash
+curl -X POST http://atupi.local:3000/api/tune \
+  -H "Content-Type: application/json" \
+  -d '{"frequency": 1830000}'
 
-**This interface has NO authentication.**
+# Response:
+# {
+#   "ok": true,
+#   "message": "Tune OK!",
+#   "tuned": true,
+#   "swr": "1.2"
+# }
+```
 
-For public network use, add:
-- Firewall to limit access
-- Reverse proxy with authentication (nginx + basic auth)
-- VPN for secure remote access
+## 🔐 Sicurezza
 
-## License
+**ATTENZIONE:** Questa interfaccia NON ha autenticazione. 
 
-MIT License - See LICENSE file
+Per uso su rete pubblica, aggiungi:
+- Firewall per limitare accesso
+- Reverse proxy con autenticazione (nginx + basic auth)
+- VPN per accesso remoto sicuro
 
-## Credits
+## 📋 Changelog
+
+### v2.0.0 (2025-01-xx)
+- ✨ Preset tune buttons (160m, 80m, 40m)
+- ✨ SWR reading via CAT durante tuning
+- ✨ Binary BYPASS/AUTO toggle (removed MANUAL)
+- ✨ Emergency TX stop button
+- ✨ Antenna matrix 2×2 (VERTICAL/LONG WIRE + 590/SDR)
+- 🎨 New 2-column responsive layout
+- 🐛 Fixed frequency restoration after tune
+- 🐛 Improved error handling with emergency cleanup
+
+### v1.0.0 (2024-12-xx)
+- Initial release
+- Basic ATU control via GPIO
+- TS-590 CAT integration
+- WebSocket real-time updates
+
+## 📄 Licenza
+
+MIT License - Vedi file LICENSE
+
+## 🙏 Crediti
 
 - ATU-100 firmware: [N7DDC/Dfinitski](https://github.com/Dfinitski/N7DDC-ATU-100-mini-and-extended-boards)
 - Hamlib: [Hamlib Project](https://hamlib.github.io/)
 
-## Author
+## 📮 Contatti
 
-- GitHub: [@frank-ydf](https://github.com/frank-ydf)
-- Callsign: IU0AVT
-
-## Support
-
-For issues and feature requests, please use [GitHub Issues](https://github.com/frank-ydf/atu-controller/issues).
+- **Author**: Frank (IU1FYF)
+- **GitHub**: [@frank-ydf](https://github.com/frank-ydf)
+- **Project**: [atu-controller](https://github.com/frank-ydf/atu-controller)
 
 ---
 
-
-*Version 1.1 - Display Logic Fixed - December 2025*
+**73 de IU1FYF!** 📻

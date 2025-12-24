@@ -64,39 +64,6 @@ function rigCommand(cmd) {
   });
 }
 
-// ============================================================================
-// HELPER: Smart Polling per Tune Completion
-// ============================================================================
-
-async function waitTuneComplete(maxTimeoutSec = 30) {
-  return new Promise((resolve) => {
-    let elapsed = 0;
-    const interval = 500; // Check ogni 500ms
-    
-    const checkStatus = setInterval(() => {
-      exec('/home/pi/atu-controller/atu_gpio.py status', (err, stdout) => {
-        elapsed += interval;
-        
-        if (err || elapsed >= maxTimeoutSec * 1000) {
-          clearInterval(checkStatus);
-          resolve(false); // Timeout o errore
-          return;
-        }
-        
-        // Check if tuning completed
-        if (!stdout.includes('TUNING')) {
-          clearInterval(checkStatus);
-          resolve(true); // Tune completato!
-        }
-      });
-    }, interval);
-  });
-}
-
-// ============================================================================
-// API ENDPOINTS
-// ============================================================================
-
 // API: Get frequency
 app.get('/api/frequency', async (req, res) => {
   try {
@@ -112,17 +79,6 @@ app.post('/api/frequency', async (req, res) => {
   try {
     await rigCommand(`F ${req.body.frequency}`);
     res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// API: Get mode
-app.get('/api/mode', async (req, res) => {
-  try {
-    const resp = await rigCommand('m');
-    const mode = resp.split('\n')[0];
-    res.json({ mode: mode });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -160,7 +116,7 @@ app.post('/api/tx', async (req, res) => {
   }
 });
 
-// API: RX
+// API: RX (Emergency stop)
 app.post('/api/rx', async (req, res) => {
   try {
     await rigCommand('T 0');
@@ -181,38 +137,7 @@ app.get('/api/tx-status', async (req, res) => {
   }
 });
 
-// ============================================================================
-// ATU CONTROL ENDPOINTS
-// ============================================================================
-
-app.post('/api/atu/auto', (req, res) => {
-  exec('/home/pi/atu-controller/atu_gpio.py auto', (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ ok: true, output: stdout });
-  });
-});
-
-app.post('/api/atu/tune', (req, res) => {
-  exec('/home/pi/atu-controller/atu_gpio.py tune', (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ ok: true, output: stdout });
-  });
-});
-
-app.post('/api/atu/bypass', (req, res) => {
-  exec('/home/pi/atu-controller/atu_gpio.py bypass', (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ ok: true, output: stdout });
-  });
-});
-
-app.post('/api/atu/reset', (req, res) => {
-  exec('/home/pi/atu-controller/atu_gpio.py reset', (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ ok: true, output: stdout });
-  });
-});
-
+// API: ATU status
 app.get('/api/atu/status', (req, res) => {
   exec('/home/pi/atu-controller/atu_gpio.py status', (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -224,7 +149,7 @@ app.get('/api/atu/status', (req, res) => {
   });
 });
 
-// API: Get ATU full state (✅ LOGICA CORRETTA)
+// API: Get ATU full state
 app.get('/api/atu/fullstatus', (req, res) => {
   exec('/home/pi/atu-controller/atu_gpio.py state', (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -241,60 +166,88 @@ app.get('/api/atu/fullstatus', (req, res) => {
     exec('/home/pi/atu-controller/atu_gpio.py status', (err2, stdout2) => {
       const isTuning = stdout2 ? stdout2.includes('TUNING') : false;
       
-      // ✅ LOGICA CORRETTA DISPLAY (dal manuale N7DDC)
-      // DOT (.) = AUTO mode
-      // NOTHING ( ) = MANUAL mode  
-      // UNDERSCORE (_) = BYPASS mode
-      let displaySymbol;
-      if (bypassMode) {
-        displaySymbol = '_';  // Bypass
-      } else if (autoMode) {
-        displaySymbol = '.';  // Auto (DOT)
-      } else {
-        displaySymbol = ' ';  // Manual (NIENTE)
-      }
-      
       res.json({
         tuning: isTuning,
         auto: autoMode,
         bypass: bypassMode,
-        display: displaySymbol,
-        mode: bypassMode ? 'BYPASS' : (autoMode ? 'AUTO' : 'MANUAL')
+        mode: bypassMode ? 'BYPASS' : 'AUTO'
       });
     });
   });
 });
 
-// API: Full tune sequence (✅ CON SMART POLLING)
+// API: Toggle BYPASS/AUTO mode (binary toggle)
+app.post('/api/atu/toggle-mode', (req, res) => {
+  exec('/home/pi/atu-controller/atu_gpio.py auto', (err, stdout) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    // Read new state
+    exec('/home/pi/atu-controller/atu_gpio.py state', (err2, stdout2) => {
+      const isAuto = stdout2.includes('AUTO=true') || stdout2.includes('AUTO=True');
+      res.json({ 
+        ok: true, 
+        mode: isAuto ? 'auto' : 'bypass',
+        output: stdout 
+      });
+    });
+  });
+});
+
+// API: Bypass (legacy compatibility)
+app.post('/api/atu/bypass', (req, res) => {
+  exec('/home/pi/atu-controller/atu_gpio.py bypass', (err, stdout) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true, output: stdout });
+  });
+});
+
+// API: Reset
+app.post('/api/atu/reset', (req, res) => {
+  exec('/home/pi/atu-controller/atu_gpio.py reset', (err, stdout) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true, output: stdout });
+  });
+});
+
+// API: Full tune sequence with preset frequency
 app.post('/api/tune', async (req, res) => {
-  console.log('🎯 Starting tune sequence...');
+  const targetFreq = req.body.frequency; // Frequency in Hz
+  console.log(`🎯 Starting tune sequence on ${targetFreq} Hz...`);
   
   let originalMode = null;
   let originalPower = null;
+  let originalFreq = null;
+  let finalSWR = null;
   
   try {
-    // 1. Salva configurazione attuale
+    // 1. Save current configuration
     const modeResp = await rigCommand('m');
     originalMode = modeResp.split('\n')[0];
     originalPower = await rigCommand('l RFPOWER');
-    console.log(`💾 Saved: Mode=${originalMode}, Power=${originalPower}`);
+    originalFreq = await rigCommand('f');
+    console.log(`💾 Saved: Freq=${originalFreq}, Mode=${originalMode}, Power=${originalPower}`);
     
-    // 2. Set potenza tune (10W)
+    // 2. Set target frequency
+    console.log(`📻 Setting frequency to ${targetFreq} Hz`);
+    await rigCommand(`F ${targetFreq}`);
+    await new Promise(r => setTimeout(r, 500));
+    
+    // 3. Set tune power (10W)
     console.log('⚡ Setting power to 10W');
     await rigCommand('L RFPOWER 0.10');
     await new Promise(r => setTimeout(r, 500));
     
-    // 3. Passa a FSK mode (RTTY)
+    // 4. Switch to FSK mode (RTTY)
     console.log('📻 Switching to FSK mode');
     await rigCommand('M RTTY 0');
     await new Promise(r => setTimeout(r, 800));
     
-    // 4. TX ON (in FSK trasmette automaticamente tono!)
+    // 5. TX ON (FSK generates carrier automatically)
     console.log('📻 TX ON (FSK carrier)');
     await rigCommand('T 1');
-    await new Promise(r => setTimeout(r, 2000)); // Aspetta stabilizzazione
+    await new Promise(r => setTimeout(r, 2000)); // Wait for stabilization
     
-    // 5. Trigger ATU tune
+    // 6. Trigger ATU tune
     console.log('🎛️ Triggering ATU...');
     await new Promise((resolve, reject) => {
       exec('/home/pi/atu-controller/atu_gpio.py tune', (err, stdout) => {
@@ -304,30 +257,54 @@ app.post('/api/tune', async (req, res) => {
       });
     });
     
-    // AGGIUNGI QUESTO: Aspetta che il pulse finisca completamente
-    await new Promise(r => setTimeout(r, 1000)); // 1 secondo di pausa
+    // Wait for pulse to complete
+    await new Promise(r => setTimeout(r, 1000));
     
-    // 6. ✅ SMART POLLING - Aspetta tune (max 30s)
-    console.log('⏳ Waiting for tune completion (smart polling)...');
-    const tuned = await waitTuneComplete(30);
-    
-    if (tuned) {
-      console.log('✅ Tune completed successfully');
-    } else {
-      console.log('⚠️ Tune timeout - may need manual check');
+    // 7. Wait for tune completion (smart polling)
+    console.log('⏳ Waiting for tune...');
+    let tuned = false;
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      
+      const statusCheck = await new Promise((resolve) => {
+        exec('/home/pi/atu-controller/atu_gpio.py status', (err, stdout) => {
+          resolve(stdout ? !stdout.includes('TUNING') : true);
+        });
+      });
+      
+      if (statusCheck) {
+        tuned = true;
+        console.log('✅ Tune completed');
+        break;
+      }
     }
     
-    // 7. TX OFF
+    // 8. Read SWR before turning off TX
+    try {
+      const swrResp = await rigCommand('l SWR');
+      finalSWR = parseFloat(swrResp).toFixed(1);
+      console.log(`📊 Final SWR: ${finalSWR}`);
+    } catch (err) {
+      console.log('⚠️ Could not read SWR:', err.message);
+      finalSWR = null;
+    }
+    
+    // 9. TX OFF
     console.log('📻 TX OFF');
     await rigCommand('T 0');
     await new Promise(r => setTimeout(r, 500));
     
-    // 8. Ripristina mode originale
+    // 10. Restore original frequency
+    console.log(`📻 Restoring frequency: ${originalFreq}`);
+    await rigCommand(`F ${originalFreq}`);
+    await new Promise(r => setTimeout(r, 300));
+    
+    // 11. Restore original mode
     console.log(`📻 Restoring mode: ${originalMode}`);
     await rigCommand(`M ${originalMode} 0`);
     await new Promise(r => setTimeout(r, 300));
     
-    // 9. Ripristina potenza
+    // 12. Restore power
     console.log('⚡ Restoring power');
     await rigCommand(`L RFPOWER ${originalPower}`);
     
@@ -336,7 +313,8 @@ app.post('/api/tune', async (req, res) => {
     res.json({ 
       ok: true, 
       message: tuned ? 'Tune OK!' : 'Timeout',
-      tuned: tuned
+      tuned: tuned,
+      swr: finalSWR
     });
     
   } catch (err) {
@@ -347,6 +325,9 @@ app.post('/api/tune', async (req, res) => {
       console.log('🚨 Emergency cleanup');
       await rigCommand('T 0'); // TX OFF
       
+      if (originalFreq) {
+        await rigCommand(`F ${originalFreq}`);
+      }
       if (originalMode) {
         await rigCommand(`M ${originalMode} 0`);
       }
@@ -359,26 +340,18 @@ app.post('/api/tune', async (req, res) => {
   }
 });
 
-// ============================================================================
-// WEBSOCKET UPDATES
-// ============================================================================
-
+// WebSocket updates
 io.on('connection', (socket) => {
   console.log('📱 Client connected');
   
   const interval = setInterval(async () => {
     try {
       const freq = await rigCommand('f');
-      const mode = await rigCommand('m');
-      const powerResp = await rigCommand('l RFPOWER');
-      const power = Math.round(parseFloat(powerResp) * 100);
       const pttResp = await rigCommand('t');
       const ptt = parseInt(pttResp);
       
       socket.emit('update', { 
         frequency: parseInt(freq),
-        mode: mode.split('\n')[0],
-        power: power,
         txStatus: ptt === 1 ? 'TX' : 'RX',
         timestamp: Date.now()
       });
@@ -393,11 +366,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// ============================================================================
-// SERVER START
-// ============================================================================
-
 const PORT = 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server on http://0.0.0.0:${PORT}`);
+  console.log(`🚀 ATU Controller v2.0 on http://0.0.0.0:${PORT}`);
 });
