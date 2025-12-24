@@ -44,7 +44,9 @@ function rigCommand(cmd) {
     
     let response = '';
     let timeoutId = setTimeout(() => {
-      rigSocket.removeListener('data', onData);
+      if (rigSocket) {  // ← AGGIUNGI QUESTO CHECK
+        rigSocket.removeListener('data', onData);
+      }
       reject(new Error('Timeout'));
     }, 3000);
     
@@ -53,7 +55,9 @@ function rigCommand(cmd) {
       
       if (response.includes('\n')) {
         clearTimeout(timeoutId);
-        rigSocket.removeListener('data', onData);
+        if (rigSocket) {  // ← AGGIUNGI QUESTO CHECK
+          rigSocket.removeListener('data', onData);
+        }
         const lines = response.split('\n').filter(l => l.trim());
         resolve(lines[0]);
       }
