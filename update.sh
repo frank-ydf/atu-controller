@@ -101,7 +101,7 @@ fi
 echo ""
 echo -e "${GREEN}✅ Update complete!${NC}"
 echo ""
-echo "Access interface at: http://atupi.local:3000"
+echo "Access interface at: http://$(hostname).local:3000"
 echo ""
 echo "Quick tests:"
 echo "  ./atu_gpio.py status"
