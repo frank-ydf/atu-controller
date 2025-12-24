@@ -292,10 +292,10 @@ MIT License - Vedi file LICENSE
 
 ## 📮 Contatti
 
-- **Author**: Frank (IU1FYF)
+- **Author**: Frank (IU0AVT)
 - **GitHub**: [@frank-ydf](https://github.com/frank-ydf)
 - **Project**: [atu-controller](https://github.com/frank-ydf/atu-controller)
 
 ---
 
-**73 de IU1FYF!** 📻
+**73 de IU0AVT!** 📻

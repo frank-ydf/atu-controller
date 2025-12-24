@@ -16,7 +16,7 @@
     "raspberry-pi",
     "remote-control"
   ],
-  "author": "Frank (IU1FYF)",
+  "author": "Frank (IU0AVT)",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
