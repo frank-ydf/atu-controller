@@ -512,7 +512,19 @@
     let currentMode = 'bypass'; // 'bypass' or 'auto'
     let lastSWR = '--';
     let stationControlOnline = false;
-    const STATION_CONTROL_URL = 'http://radio.local'; // Station Control mDNS
+    let STATION_CONTROL_URL = ''; // Will be loaded from backend config
+    
+    // Load configuration from backend
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const config = await res.json();
+        STATION_CONTROL_URL = config.stationControlUrl;
+        console.log('📡 Station Control URL:', STATION_CONTROL_URL);
+      } catch (err) {
+        console.error('Failed to load config:', err);
+      }
+    }
     
     // Connection handling
     socket.on('connect', () => {
@@ -770,8 +782,10 @@
     setInterval(checkStationControl, 2000);
     
     // Initial status
-    updateATUStatus();
-    checkStationControl();
+    loadConfig().then(() => {
+      updateATUStatus();
+      checkStationControl();
+    });
     
     console.log('🚀 ATU Controller Interface Loaded');
   </script>
