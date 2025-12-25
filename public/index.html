@@ -205,6 +205,20 @@
       pointer-events: none;
     }
     
+    .matrix-cell.disconnect-btn {
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      border-color: #c0392b;
+      margin-top: 8px;
+      font-weight: bold;
+      color: white;
+    }
+    
+    .matrix-cell.disconnect-btn:hover {
+      background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(231, 76, 60, 0.5);
+    }
+    
     /* Antenna Matrix Offline Overlay */
     .matrix-overlay {
       position: relative;
@@ -455,6 +469,9 @@
             <div class="matrix-row" style="grid-template-columns: repeat(2, 1fr);">
               <div class="matrix-cell" data-radio="590" onclick="selectRadio('590')">590</div>
               <div class="matrix-cell" data-radio="SDR" onclick="selectRadio('SDR')">SDR</div>
+            </div>
+            <div class="matrix-row" style="grid-template-columns: 1fr;">
+              <div class="matrix-cell disconnect-btn" onclick="disconnectAll()">🔌 DISCONNECT ALL</div>
             </div>
           </div>
           <div class="matrix-offline-indicator" id="matrix-offline">
@@ -764,6 +781,40 @@
         }
       } catch (err) {
         console.error('Error selecting radio:', err);
+        alert('❌ Error: ' + err.message);
+      }
+    }
+    
+    async function disconnectAll() {
+      if (!stationControlOnline) {
+        alert('❌ Station Control offline');
+        return;
+      }
+      
+      if (!confirm('Disconnect all antennas and radios?')) {
+        return;
+      }
+      
+      console.log('Disconnecting all...');
+      
+      try {
+        const res = await fetch('/api/station/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cmd: 'master_off', val: 0 })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          updateMatrixFromState(data.state);
+          
+          // Clear all active states visually
+          document.querySelectorAll('[data-ant]').forEach(el => el.classList.remove('active'));
+          document.querySelectorAll('[data-radio]').forEach(el => el.classList.remove('active'));
+          document.getElementById('current-antenna').textContent = 'None';
+        }
+      } catch (err) {
+        console.error('Error disconnecting:', err);
         alert('❌ Error: ' + err.message);
       }
     }
