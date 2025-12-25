@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ATU-100 Remote Controller</title>
+  <title>ATU-100 Controller v2.0</title>
   <style>
     * {
       margin: 0;
@@ -205,6 +205,15 @@
       pointer-events: none;
     }
     
+    .matrix-note {
+      margin-top: 10px;
+      padding: 10px;
+      background: rgba(241, 196, 15, 0.1);
+      border-left: 3px solid #f1c40f;
+      font-size: 0.85em;
+      color: #f1c40f;
+    }
+    
     /* ATU Panel */
     .atu-panel {
       min-height: 500px;
@@ -302,6 +311,30 @@
       background: #2ecc71;
     }
     
+    /* Antenna Display */
+    .antenna-display {
+      background: rgba(0,0,0,0.3);
+      padding: 15px 20px;
+      border-radius: 8px;
+      border: 2px solid rgba(52, 152, 219, 0.3);
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+    
+    .antenna-display .label {
+      font-size: 1em;
+      color: #95a5a6;
+    }
+    
+    .antenna-display .value {
+      font-size: 1.3em;
+      font-weight: bold;
+      color: #3498db;
+    }
+    
     /* Status Display */
     .atu-status-row {
       display: flex;
@@ -334,30 +367,6 @@
       animation: pulse 1s infinite;
     }
     
-    /* Antenna Display */
-    .antenna-display {
-      background: rgba(0,0,0,0.3);
-      padding: 15px 20px;
-      border-radius: 8px;
-      border: 2px solid rgba(52, 152, 219, 0.3);
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 15px;
-    }
-    
-    .antenna-display .label {
-      font-size: 1em;
-      color: #95a5a6;
-    }
-    
-    .antenna-display .value {
-      font-size: 1.3em;
-      font-weight: bold;
-      color: #3498db;
-    }
-    
     @keyframes pulse {
       0%, 100% { transform: scale(1); opacity: 1; }
       50% { transform: scale(1.2); opacity: 0.7; }
@@ -378,7 +387,7 @@
 <body>
   <!-- Header -->
   <div class="header">
-    <h1>🔌 ATU-100 Remote Controller</h1>
+    <h1>🔌 ATU-100 Controller v2.0 (Standalone)</h1>
     <div class="header-info">
       <div class="status-badge" id="connection-badge">🔴 Offline</div>
       <div>Last Update: <span id="last-update">--:--:--</span></div>
@@ -411,7 +420,7 @@
       
       <!-- Antenna Switch Panel -->
       <div class="panel">
-        <div class="panel-title">📡 Antenna Switch</div>
+        <div class="panel-title">📡 Antenna Switch (UI Only)</div>
         <div class="matrix-container">
           <div class="matrix-row" style="grid-template-columns: repeat(2, 1fr);">
             <div class="matrix-cell" data-ant="VERTICAL" onclick="selectAntenna('VERTICAL')">VERTICAL</div>
@@ -421,6 +430,9 @@
             <div class="matrix-cell" data-radio="590" onclick="selectRadio('590')">590</div>
             <div class="matrix-cell" data-radio="SDR" onclick="selectRadio('SDR')">SDR</div>
           </div>
+        </div>
+        <div class="matrix-note">
+          ⚠️ This version has UI-only antenna matrix. For full Station Control integration, use v2.0-integrated branch.
         </div>
       </div>
     </div>
@@ -437,7 +449,7 @@
         
         <div class="antenna-display">
           <span class="label">Current Antenna:</span>
-          <span class="value" id="current-antenna">Vertical</span>
+          <span class="value" id="current-antenna">--</span>
         </div>
       </div>
       
@@ -493,10 +505,6 @@
       if (data.frequency) {
         const freqMHz = (data.frequency / 1000000).toFixed(3);
         document.getElementById('frequency').textContent = freqMHz + ' MHz';
-      }
-      
-      if (data.mode) {
-        document.getElementById('mode').textContent = data.mode;
       }
       
       if (data.txStatus) {
@@ -607,14 +615,12 @@
       }
     }
     
-    // Antenna selection
-    async function selectAntenna(ant) {
-      console.log('Selecting antenna:', ant);
-      // TODO: Implement antenna switching
+    // Antenna selection (UI only - no backend)
+    function selectAntenna(ant) {
+      console.log('Selecting antenna (UI only):', ant);
       document.querySelectorAll('[data-ant]').forEach(el => el.classList.remove('active'));
       document.querySelector(`[data-ant="${ant}"]`).classList.add('active');
       
-      // Display simplified names
       const displayNames = {
         'VERTICAL': 'Vertical',
         'LONGWIRE': 'Long Wire'
@@ -622,9 +628,8 @@
       document.getElementById('current-antenna').textContent = displayNames[ant] || ant;
     }
     
-    async function selectRadio(radio) {
-      console.log('Selecting radio:', radio);
-      // TODO: Implement radio switching
+    function selectRadio(radio) {
+      console.log('Selecting radio (UI only):', radio);
       document.querySelectorAll('[data-radio]').forEach(el => el.classList.remove('active'));
       document.querySelector(`[data-radio="${radio}"]`).classList.add('active');
     }
@@ -641,12 +646,10 @@
     
     // Initial status
     updateATUStatus();
-    
-    // Set default selections
     selectAntenna('VERTICAL');
     selectRadio('590');
     
-    console.log('🚀 ATU Controller Interface Loaded');
+    console.log('🚀 ATU Controller v2.0-standalone loaded');
   </script>
 </body>
 </html>
