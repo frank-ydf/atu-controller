@@ -44,9 +44,7 @@ function rigCommand(cmd) {
     
     let response = '';
     let timeoutId = setTimeout(() => {
-      if (rigSocket) {  // ← AGGIUNGI QUESTO CHECK
-        rigSocket.removeListener('data', onData);
-      }
+      rigSocket.removeListener('data', onData);
       reject(new Error('Timeout'));
     }, 3000);
     
@@ -55,9 +53,7 @@ function rigCommand(cmd) {
       
       if (response.includes('\n')) {
         clearTimeout(timeoutId);
-        if (rigSocket) {  // ← AGGIUNGI QUESTO CHECK
-          rigSocket.removeListener('data', onData);
-        }
+        rigSocket.removeListener('data', onData);
         const lines = response.split('\n').filter(l => l.trim());
         resolve(lines[0]);
       }
@@ -372,5 +368,7 @@ io.on('connection', (socket) => {
 
 const PORT = 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 ATU Controller v2.0 on http://0.0.0.0:${PORT}`);
+  const hostname = require('os').hostname();
+  console.log(`🚀 ATU Controller v2.0-standalone on http://0.0.0.0:${PORT}`);
+  console.log(`   Access at: http://${hostname}.local:${PORT}`);
 });

@@ -78,7 +78,7 @@ fi
 echo ""
 echo -e "${GREEN}✅ Update complete! v2.0${NC}"
 echo ""
-echo "Access interface at: http://atupi.local:3000"
+echo "Access interface at: http://$(hostname).local:3000"
 echo ""
 echo "To view logs:"
 echo "  journalctl -u atu-web -f"

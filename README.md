@@ -63,7 +63,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now rigctld atu-web
 ```
 
-Accedi: `http://atu-pi.local:3000`
+Accedi: `http://<hostname>.local:3000` (es: `http://atu-pi.local:3000`)
 
 ## 📝 API Endpoints
 
