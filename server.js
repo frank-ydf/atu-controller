@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -12,8 +13,15 @@ const io = socketIo(server);
 app.use(express.static('public'));
 app.use(express.json());
 
+// Configuration endpoint
+app.get('/api/config', (req, res) => {
+  res.json({
+    stationControlUrl: STATION_CONTROL_URL
+  });
+});
+
 // Station Control configuration
-const STATION_CONTROL_URL = 'http://radio.local';
+const STATION_CONTROL_URL = process.env.STATION_CONTROL_URL || 'http://radio.local';
 
 // Connessione rigctld
 let rigSocket = null;
@@ -423,5 +431,8 @@ io.on('connection', (socket) => {
 
 const PORT = 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 ATU Controller v2.0 on http://0.0.0.0:${PORT}`);
+  const hostname = require('os').hostname();
+  console.log(`🚀 ATU Controller v2.0-integrated on http://0.0.0.0:${PORT}`);
+  console.log(`   Access at: http://${hostname}.local:${PORT}`);
+  console.log(`📡 Station Control URL: ${STATION_CONTROL_URL}`);
 });

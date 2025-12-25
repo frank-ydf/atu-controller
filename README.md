@@ -1,3 +1,9 @@
+# ATU-100 Remote Controller v2.0 (Integrated)
+
+> **Branch**: `v2.0-integrated`  
+> **Note**: This version requires [Station Control](https://github.com/frank-ydf/station-controller) for antenna switching.  
+> For standalone version without dependencies, see branch `v2.0-standalone`.
+
 # ATU-100 Remote Controller v2.0
 
 Sistema di controllo remoto via web per ATU-100 Extended (7x7) antenna tuner integrato con Kenwood TS-590.
@@ -84,6 +90,26 @@ cd atu-controller
 npm install
 ```
 
+### Configura Station Control URL (Opzionale)
+
+Se il tuo Station Control ha un hostname diverso da `radio.local`:
+
+```bash
+# Copia file di esempio
+cp .env.example .env
+
+# Modifica con il tuo URL
+nano .env
+
+# Esempio per IP statico:
+# STATION_CONTROL_URL=http://192.168.1.100
+
+# Esempio per hostname custom:
+# STATION_CONTROL_URL=http://station-control.local
+```
+
+**Default**: Se non configuri nulla, userà `http://radio.local`
+
 ### (Opzionale) Configura Station Control
 
 Se hai lo [Station Control](https://github.com/frank-ydf/station-controller) installato:
@@ -128,7 +154,13 @@ Menu → 0-9 (Extended):
 
 ### Accedi all'interfaccia web
 ```
-http://atupi.local:3000
+http://<hostname>.local:3000
+# Example: http://atu-pi.local:3000
+```
+
+O usa l'IP diretto:
+```
+http://192.168.x.x:3000
 ```
 
 ### Preset Tune (v2.0)
@@ -257,7 +289,7 @@ GET  /api/atu/fullstatus   # Stato completo con modalità
 
 ### Example: Tune con preset
 ```bash
-curl -X POST http://atupi.local:3000/api/tune \
+curl -X POST http://<your-pi>.local:3000/api/tune \
   -H "Content-Type: application/json" \
   -d '{"frequency": 1830000}'
 
