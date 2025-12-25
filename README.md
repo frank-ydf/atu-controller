@@ -1,5 +1,7 @@
-# ATU-100 Remote Controller v2.0
+# ATU-100 Remote Controller v2.0 (Standalone)
 
+> **Note**: Questa versione NON include l'integrazione Station Control.  
+> Per il controllo antenna switch automatico, vedi branch `v2.0-integrated`.
 Sistema di controllo remoto via web per ATU-100 Extended (7x7) antenna tuner integrato con Kenwood TS-590.
 
 ## 🎯 Novità v2.0
