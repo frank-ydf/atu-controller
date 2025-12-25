@@ -1,5 +1,5 @@
 [Unit]
-Description=ATU-100 Web Controller
+Description=ATU-100 Web Controller v2.0
 After=network.target rigctld.service
 
 [Service]
