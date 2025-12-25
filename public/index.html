@@ -205,6 +205,36 @@
       pointer-events: none;
     }
     
+    /* Antenna Matrix Offline Overlay */
+    .matrix-overlay {
+      position: relative;
+    }
+    
+    .matrix-offline-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      z-index: 10;
+    }
+    
+    .matrix-offline-indicator.show {
+      display: flex;
+    }
+    
+    .matrix-offline-indicator .x-mark {
+      font-size: 6em;
+      color: #e74c3c;
+      font-weight: bold;
+      text-shadow: 0 0 20px rgba(231, 76, 60, 0.8);
+    }
+    
     /* ATU Panel */
     .atu-panel {
       min-height: 500px;
@@ -358,6 +388,10 @@
       color: #3498db;
     }
     
+    .antenna-display .value.offline {
+      color: #e74c3c;
+    }
+    
     @keyframes pulse {
       0%, 100% { transform: scale(1); opacity: 1; }
       50% { transform: scale(1.2); opacity: 0.7; }
@@ -412,14 +446,19 @@
       <!-- Antenna Switch Panel -->
       <div class="panel">
         <div class="panel-title">📡 Antenna Switch</div>
-        <div class="matrix-container">
-          <div class="matrix-row" style="grid-template-columns: repeat(2, 1fr);">
-            <div class="matrix-cell" data-ant="VERTICAL" onclick="selectAntenna('VERTICAL')">VERTICAL</div>
-            <div class="matrix-cell" data-ant="LONGWIRE" onclick="selectAntenna('LONGWIRE')">LONG WIRE</div>
+        <div class="matrix-overlay">
+          <div class="matrix-container">
+            <div class="matrix-row" style="grid-template-columns: repeat(2, 1fr);">
+              <div class="matrix-cell" data-ant="VERTICAL" onclick="selectAntenna('VERTICAL')">VERTICAL</div>
+              <div class="matrix-cell" data-ant="LONGWIRE" onclick="selectAntenna('LONGWIRE')">LONG WIRE</div>
+            </div>
+            <div class="matrix-row" style="grid-template-columns: repeat(2, 1fr);">
+              <div class="matrix-cell" data-radio="590" onclick="selectRadio('590')">590</div>
+              <div class="matrix-cell" data-radio="SDR" onclick="selectRadio('SDR')">SDR</div>
+            </div>
           </div>
-          <div class="matrix-row" style="grid-template-columns: repeat(2, 1fr);">
-            <div class="matrix-cell" data-radio="590" onclick="selectRadio('590')">590</div>
-            <div class="matrix-cell" data-radio="SDR" onclick="selectRadio('SDR')">SDR</div>
+          <div class="matrix-offline-indicator" id="matrix-offline">
+            <div class="x-mark">✖</div>
           </div>
         </div>
       </div>
@@ -472,6 +511,8 @@
     let connected = false;
     let currentMode = 'bypass'; // 'bypass' or 'auto'
     let lastSWR = '--';
+    let stationControlOnline = false;
+    const STATION_CONTROL_URL = 'http://radio.local'; // Station Control mDNS
     
     // Connection handling
     socket.on('connect', () => {
@@ -607,26 +648,112 @@
       }
     }
     
+    // Station Control functions
+    async function checkStationControl() {
+      try {
+        const res = await fetch('/api/station/status');
+        const data = await res.json();
+        
+        stationControlOnline = data.online;
+        
+        if (stationControlOnline) {
+          // Update matrix from state
+          updateMatrixFromState(data.state);
+          document.getElementById('matrix-offline').classList.remove('show');
+        } else {
+          // Show offline overlay
+          document.getElementById('matrix-offline').classList.add('show');
+          document.getElementById('current-antenna').textContent = '✖';
+          document.getElementById('current-antenna').classList.add('offline');
+        }
+      } catch (err) {
+        stationControlOnline = false;
+        document.getElementById('matrix-offline').classList.add('show');
+        document.getElementById('current-antenna').textContent = '✖';
+        document.getElementById('current-antenna').classList.add('offline');
+      }
+    }
+    
+    function updateMatrixFromState(state) {
+      // Clear all active states
+      document.querySelectorAll('[data-ant]').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('[data-radio]').forEach(el => el.classList.remove('active'));
+      
+      // Antenna: 0=off, 1=VERTICAL, 2=LONGWIRE
+      if (state.antenna === 1) {
+        document.querySelector('[data-ant="VERTICAL"]').classList.add('active');
+        document.getElementById('current-antenna').textContent = 'Vertical';
+        document.getElementById('current-antenna').classList.remove('offline');
+      } else if (state.antenna === 2) {
+        document.querySelector('[data-ant="LONGWIRE"]').classList.add('active');
+        document.getElementById('current-antenna').textContent = 'Long Wire';
+        document.getElementById('current-antenna').classList.remove('offline');
+      } else {
+        document.getElementById('current-antenna').textContent = 'None';
+        document.getElementById('current-antenna').classList.remove('offline');
+      }
+      
+      // HF: 0=off, 1=RTX (590), 2=SDR
+      if (state.hf === 1) {
+        document.querySelector('[data-radio="590"]').classList.add('active');
+      } else if (state.hf === 2) {
+        document.querySelector('[data-radio="SDR"]').classList.add('active');
+      }
+    }
+    
     // Antenna selection
     async function selectAntenna(ant) {
-      console.log('Selecting antenna:', ant);
-      // TODO: Implement antenna switching
-      document.querySelectorAll('[data-ant]').forEach(el => el.classList.remove('active'));
-      document.querySelector(`[data-ant="${ant}"]`).classList.add('active');
+      if (!stationControlOnline) {
+        alert('❌ Station Control offline');
+        return;
+      }
       
-      // Display simplified names
-      const displayNames = {
-        'VERTICAL': 'Vertical',
-        'LONGWIRE': 'Long Wire'
-      };
-      document.getElementById('current-antenna').textContent = displayNames[ant] || ant;
+      console.log('Selecting antenna:', ant);
+      
+      const value = (ant === 'VERTICAL') ? 1 : 2;
+      
+      try {
+        const res = await fetch('/api/station/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cmd: 'antenna', val: value })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          updateMatrixFromState(data.state);
+        }
+      } catch (err) {
+        console.error('Error selecting antenna:', err);
+        alert('❌ Error: ' + err.message);
+      }
     }
     
     async function selectRadio(radio) {
+      if (!stationControlOnline) {
+        alert('❌ Station Control offline');
+        return;
+      }
+      
       console.log('Selecting radio:', radio);
-      // TODO: Implement radio switching
-      document.querySelectorAll('[data-radio]').forEach(el => el.classList.remove('active'));
-      document.querySelector(`[data-radio="${radio}"]`).classList.add('active');
+      
+      const value = (radio === '590') ? 1 : 2;
+      
+      try {
+        const res = await fetch('/api/station/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cmd: 'hf', val: value })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          updateMatrixFromState(data.state);
+        }
+      } catch (err) {
+        console.error('Error selecting radio:', err);
+        alert('❌ Error: ' + err.message);
+      }
     }
     
     // Keep SWR display
@@ -639,12 +766,12 @@
     // Periodic status update
     setInterval(updateATUStatus, 3000);
     
+    // Station Control polling
+    setInterval(checkStationControl, 2000);
+    
     // Initial status
     updateATUStatus();
-    
-    // Set default selections
-    selectAntenna('VERTICAL');
-    selectRadio('590');
+    checkStationControl();
     
     console.log('🚀 ATU Controller Interface Loaded');
   </script>
