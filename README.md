@@ -1,8 +1,5 @@
-# ATU-100 Remote Controller v2.0 (Integrated)
+# ATU-100 Remote Controller v2.0
 
-> **Note**: Questa versione richiede [Station Control](https://github.com/frank-ydf/station-controller).  
-> Per versione standalone senza dipendenze, vedi branch `v2.0-standalone`.
-> 
 Sistema di controllo remoto via web per ATU-100 Extended (7x7) antenna tuner integrato con Kenwood TS-590.
 
 ## 🎯 Novità v2.0
@@ -11,7 +8,9 @@ Sistema di controllo remoto via web per ATU-100 Extended (7x7) antenna tuner int
 - ✅ **SWR Reading**: Lettura SWR via CAT durante tuning
 - ✅ **Binary Toggle**: BYPASS ⟷ AUTO (eliminata modalità MANUAL)
 - ✅ **Emergency Stop**: Pulsante TX stop di emergenza
-- ✅ **Antenna Matrix**: Switch 2×2 (VERTICAL/LONG WIRE + 590/SDR)
+- ✅ **Antenna Matrix**: Switch 2×2 integrato con Station Control
+- ✅ **Station Control Integration**: Controllo remoto antenna switch via API
+- ✅ **Offline Detection**: Indicatore visuale (X rossa) quando Station Control offline
 - ✅ **Layout ottimizzato**: Design 2-colonne più compatto e professionale
 
 ## 📷 Features v2.0
@@ -83,6 +82,20 @@ cd atu-controller
 ### Installa Dipendenze Node.js
 ```bash
 npm install
+```
+
+### (Opzionale) Configura Station Control
+
+Se hai lo [Station Control](https://github.com/frank-ydf/station-controller) installato:
+
+1. Assicurati che sia raggiungibile via mDNS come `radio.local`
+2. L'integrazione è automatica - il matrix antenna si sincronizzerà automaticamente
+3. Se Station Control è offline, apparirà una **X rossa** sopra il matrix
+
+**Test connessione:**
+```bash
+curl http://radio.local/getstate
+# Dovrebbe ritornare: {"antenna":1,"hf":1,"vuhf":0}
 ```
 
 ### Configura Servizi Systemd

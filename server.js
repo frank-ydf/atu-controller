@@ -3,6 +3,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const net = require('net');
 const { exec } = require('child_process');
+const axios = require('axios');
 
 const app = express();
 const server = http.createServer(app);
@@ -10,6 +11,9 @@ const io = socketIo(server);
 
 app.use(express.static('public'));
 app.use(express.json());
+
+// Station Control configuration
+const STATION_CONTROL_URL = 'http://radio.local';
 
 // Connessione rigctld
 let rigSocket = null;
@@ -44,9 +48,7 @@ function rigCommand(cmd) {
     
     let response = '';
     let timeoutId = setTimeout(() => {
-      if (rigSocket) {  // ← AGGIUNGI QUESTO CHECK
-        rigSocket.removeListener('data', onData);
-      }
+      rigSocket.removeListener('data', onData);
       reject(new Error('Timeout'));
     }, 3000);
     
@@ -55,9 +57,7 @@ function rigCommand(cmd) {
       
       if (response.includes('\n')) {
         clearTimeout(timeoutId);
-        if (rigSocket) {  // ← AGGIUNGI QUESTO CHECK
-          rigSocket.removeListener('data', onData);
-        }
+        rigSocket.removeListener('data', onData);
         const lines = response.split('\n').filter(l => l.trim());
         resolve(lines[0]);
       }
@@ -343,6 +343,57 @@ app.post('/api/tune', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ============================================================================
+// STATION CONTROL PROXY APIs
+// ============================================================================
+
+// Get station control status and state
+app.get('/api/station/status', async (req, res) => {
+  try {
+    const response = await axios.get(`${STATION_CONTROL_URL}/getstate`, { timeout: 2000 });
+    res.json({
+      online: true,
+      state: response.data
+    });
+  } catch (err) {
+    res.json({
+      online: false,
+      state: { antenna: 0, hf: 0, vuhf: 0 }
+    });
+  }
+});
+
+// Send control command to station control
+app.post('/api/station/control', async (req, res) => {
+  const { cmd, val } = req.body;
+  
+  try {
+    // Send command to Station Control
+    await axios.post(`${STATION_CONTROL_URL}/control`, null, {
+      params: { cmd, val },
+      timeout: 2000
+    });
+    
+    // Get updated state
+    const response = await axios.get(`${STATION_CONTROL_URL}/getstate`, { timeout: 2000 });
+    
+    res.json({
+      ok: true,
+      state: response.data
+    });
+  } catch (err) {
+    console.error('Station Control error:', err.message);
+    res.status(500).json({
+      ok: false,
+      error: err.message
+    });
+  }
+});
+
+// ============================================================================
+// WEBSOCKET UPDATES
+// ============================================================================
 
 // WebSocket updates
 io.on('connection', (socket) => {
