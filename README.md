@@ -1,5 +1,8 @@
-# ATU-100 Remote Controller v2.0
+# ATU-100 Remote Controller v2.0 (Integrated)
 
+> **Note**: Questa versione richiede [Station Control](https://github.com/frank-ydf/station-controller).  
+> Per versione standalone senza dipendenze, vedi branch `v2.0-standalone`.
+> 
 Sistema di controllo remoto via web per ATU-100 Extended (7x7) antenna tuner integrato con Kenwood TS-590.
 
 ## 🎯 Novità v2.0
