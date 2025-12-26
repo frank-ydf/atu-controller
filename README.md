@@ -1,349 +1,277 @@
-# ATU-100 Remote Controller v2.0 (Integrated)
+# ATU Controller + Station Control Integration
 
-> **Branch**: `v2.0-integrated`  
-> **Note**: This version requires [Station Control](https://github.com/frank-ydf/station-controller) for antenna switching.  
-> For standalone version without dependencies, see branch `v2.0-standalone`.
+Integrazione tra ATU-100 Remote Controller e Station Control per antenna switching automatico durante il tuning.
 
-# ATU-100 Remote Controller v2.0
+## 📋 Panoramica
 
-Sistema di controllo remoto via web per ATU-100 Extended (7x7) antenna tuner integrato con Kenwood TS-590.
+Quando viene eseguito il comando TUNE:
+1. Il sistema verifica l'antenna corrente (SDR o 590)
+2. Se è selezionato SDR, commuta automaticamente su 590 (HF RTX)
+3. **Attende conferma fisica dal relay** prima di trasmettere
+4. Esegue la sequenza di tuning con FSK carrier
+5. Al termine, ripristina l'antenna originale se era SDR
 
-## 🎯 Novità v2.0
+## 🔧 Modifiche Hardware
 
-- ✅ **Preset Tune**: 3 pulsanti con frequenze preimpostate (160m, 80m, 40m)
-- ✅ **SWR Reading**: Lettura SWR via CAT durante tuning
-- ✅ **Binary Toggle**: BYPASS ⟷ AUTO (eliminata modalità MANUAL)
-- ✅ **Emergency Stop**: Pulsante TX stop di emergenza
-- ✅ **Antenna Matrix**: Switch 2×2 integrato con Station Control
-- ✅ **Station Control Integration**: Controllo remoto antenna switch via API
-- ✅ **Offline Detection**: Indicatore visuale (X rossa) quando Station Control offline
-- ✅ **Layout ottimizzato**: Design 2-colonne più compatto e professionale
+**NESSUNA** - tutto via software, usa GPIO esistenti per feedback.
 
-## 📷 Features v2.0
+## 📁 File Modificati
 
-### Interfaccia Web
-- **Layout 2 colonne**: TS-590 compatto (30%) + ATU panel largo (70%)
-- **Preset Tune Buttons**: 1830, 3650, 7100 kHz con auto-frequency switching
-- **SWR Display**: Lettura real-time durante tuning, visualizzazione permanente
-- **Mode Toggle**: Switch visuale BYPASS ⟷ AUTO
-- **Emergency Stop**: Interruzione immediata TX in caso di problemi
-- **Antenna Switch Matrix**: 2×2 grid per selezione antenna e radio
+### 1. Station Control (ESP32)
+File: `station_master_8rl_v2.ino`
 
-### Backend
-- **Frequency-based tuning**: Imposta freq → tune → ripristina freq originale
-- **SWR CAT reading**: Comando Hamlib `get_level SWR`
-- **Smart tune polling**: Verifica completamento accordatura
-- **Emergency cleanup**: Ripristino automatico in caso di errori
+**Novità aggiunte:**
+- `GET /api/antenna/status` - Ritorna stato antenna + verifica relay fisica
+- `POST /api/antenna/590` - Switch a TS-590 (HF=1)
+- `POST /api/antenna/sdr` - Switch a SDR (HF=2)
 
-## 🔌 Hardware
-
-### Componenti
-- Raspberry Pi 3B
-- ATU-100 Extended (7x7) antenna tuner
-- Kenwood TS-590 transceiver
-- 3× Optoisolatori 4N35
-- Resistori (330Ω, 2.2kΩ, 3.3kΩ)
-- Perfboard
-
-### Collegamenti GPIO
+**Risposta JSON `/api/antenna/status`:**
+```json
+{
+  "selected": "590",           // "590", "sdr", o "off"
+  "relay": {
+    "b1": 1,                   // Relay B1 (GPIO14) - 1=attivo
+    "b2": 0,                   // Relay B2 (GPIO26) - 0=inattivo
+    "c1": 0                    // Relay C1 (GPIO25) - 0=inattivo
+  },
+  "relay_ok": true,            // true se relay corrisponde a "selected"
+  "hf_state": 1,               // 0=off, 1=RTX(590), 2=SDR
+  "antenna_state": 1           // 0=off, 1=verticale, 2=longwire
+}
 ```
-Raspberry Pi → ATU-100:
-GPIO17 (Pin 11) → Opto1 → ATU RB1 (TUNE/RESET)
-GPIO27 (Pin 13) → Opto2 → ATU RB2 (BYPASS)
-GPIO10 (Pin 19) → Opto3 → ATU RB3 (AUTO)
-GPIO22 (Pin 15) ← Divisore ← ATU RA7 (Tx_req monitor)
-GND → ATU GND
 
-Divisore tensione RA7 (5V → 3.3V):
-ATU RA7 (5V) ──[2.2kΩ]──┬── Pi GPIO22
-                         │
-                     [3.3kΩ]
-                         │
-                        GND
+**Logica relay HF:**
+- **590 (RTX)**: solo B1 attivo → `relay_ok = (b1=1 && b2=0 && c1=0)`
+- **SDR**: B1+B2+C1 attivi → `relay_ok = (b1=1 && b2=1 && c1=1)`
+- **OFF**: tutti inattivi → `relay_ok = (b1=0 && b2=0 && c1=0)`
+
+### 2. ATU Controller (Raspberry Pi)
+File: `server_integrated.js`
+
+**Novità aggiunte:**
+- Funzione `waitForAntennaSwitch()` - Verifica relay con retry
+- Endpoint `/api/tune` modificato per antenna switching
+- Gestione errori e ripristino automatico
+
+**Flusso sequenza TUNE:**
+```
+1. GET /api/antenna/status → salva stato corrente
+2. POST /api/antenna/590 → switch a 590
+3. Polling status fino a relay_ok=true (max 1s)
+4. ✅ Confermato → procede con tuning
+5. Sequenza FSK/RTTY normale
+6. POST /api/antenna/{originale} → ripristina se era SDR
+7. Polling status fino a conferma
 ```
 
 ## 🚀 Installazione
 
-### Prerequisiti
-```bash
-# Aggiorna sistema
-sudo apt update && sudo apt upgrade -y
-
-# Installa dipendenze
-sudo apt install -y git vim htop python3-pip python3-venv python3-lgpio \
-                    libhamlib-utils libhamlib-dev libhamlib4 nodejs npm
-
-# Verifica versioni
-node --version  # v20.x.x
-rigctl --version  # Hamlib 4.x
-```
-
-### Clona Repository
-```bash
-cd /home/pi
-git clone https://github.com/frank-ydf/atu-controller.git
-cd atu-controller
-```
-
-### Installa Dipendenze Node.js
-```bash
-npm install
-```
-
-### Configura Station Control URL (Opzionale)
-
-Se il tuo Station Control ha un hostname diverso da `radio.local`:
+### Step 1: Aggiorna Station Control (ESP32)
 
 ```bash
-# Copia file di esempio
-cp .env.example .env
-
-# Modifica con il tuo URL
-nano .env
-
-# Esempio per IP statico:
-# STATION_CONTROL_URL=http://192.168.1.100
-
-# Esempio per hostname custom:
-# STATION_CONTROL_URL=http://station-control.local
+# 1. Apri Arduino IDE
+# 2. Carica station_master_8rl_v2.ino
+# 3. Compila e upload su ESP32
+# 4. Verifica serial monitor:
+#    - "Sistema pronto"
+#    - "API ATU enabled:"
 ```
 
-**Default**: Se non configuri nulla, userà `http://radio.local`
+### Step 2: Testa API Station Control
 
-### (Opzionale) Configura Station Control
-
-Se hai lo [Station Control](https://github.com/frank-ydf/station-controller) installato:
-
-1. Assicurati che sia raggiungibile via mDNS come `radio.local`
-2. L'integrazione è automatica - il matrix antenna si sincronizzerà automaticamente
-3. Se Station Control è offline, apparirà una **X rossa** sopra il matrix
-
-**Test connessione:**
 ```bash
-curl http://radio.local/getstate
-# Dovrebbe ritornare: {"antenna":1,"hf":1,"vuhf":0}
+# Da Raspberry Pi, verifica connettività
+curl http://radio.local/api/antenna/status
+
+# Risposta attesa (esempio):
+# {"selected":"sdr","relay":{"b1":1,"b2":1,"c1":1},"relay_ok":true,"hf_state":2,"antenna_state":1}
+
+# Test switch a 590
+curl -X POST http://radio.local/api/antenna/590
+
+# Test switch a SDR
+curl -X POST http://radio.local/api/antenna/sdr
 ```
 
-### Configura Servizi Systemd
-```bash
-# Copia file servizi
-sudo cp systemd/rigctld.service /etc/systemd/system/
-sudo cp systemd/atu-web.service /etc/systemd/system/
+### Step 3: Aggiorna ATU Controller
 
-# Abilita e avvia servizi
-sudo systemctl daemon-reload
-sudo systemctl enable rigctld atu-web
-sudo systemctl start rigctld atu-web
-```
-
-### Configura TS-590
-```
-Menu → 1-9 (COM):
-├─ Baud Rate: 115200
-├─ Data: 8 bit
-├─ Stop: 1 bit
-├─ Parity: None
-└─ Handshake: None
-
-Menu → 0-9 (Extended):
-├─ Ext Control: ON
-└─ TXW: ON
-```
-
-## 🎮 Utilizzo
-
-### Accedi all'interfaccia web
-```
-http://<hostname>.local:3000
-# Example: http://atu-pi.local:3000
-```
-
-O usa l'IP diretto:
-```
-http://192.168.x.x:3000
-```
-
-### Preset Tune (v2.0)
-1. Click su uno dei 3 preset buttons (160m, 80m, 40m)
-2. Conferma operazione
-3. Sistema automaticamente:
-   - Salva frequenza/mode/power correnti
-   - Imposta frequenza preset
-   - Passa a FSK mode @ 10W
-   - Trasmette carrier per tuning
-   - Legge SWR finale
-   - Ripristina configurazione originale
-
-### Emergency Stop
-- Pulsante **🛑 EMERGENCY STOP TX** nel box TS-590
-- Interrompe immediatamente la trasmissione
-- Sicurezza in caso di problemi durante tuning
-
-### BYPASS/AUTO Toggle
-- **BYPASS**: ATU disabilitato (L=0, C=0)
-- **AUTO**: ATU in modalità automatica
-- Click sullo switch per toggle istantaneo
-
-### Comandi da CLI
 ```bash
 cd /home/pi/atu-controller
 
-# Status completo
-./atu_gpio.py status
+# Backup server.js attuale
+cp server.js server.js.backup
 
-# Toggle BYPASS/AUTO
-./atu_gpio.py auto
+# Copia nuovo server
+cp /tmp/server_integrated.js server.js
 
-# Tune manuale
-./atu_gpio.py tune
+# IMPORTANTE: Verifica URL Station Control
+nano server.js
+# Cerca: const STATION_CONTROL_URL = 'http://radio.local';
+# Modifica se usi IP diretto invece di mDNS
 
-# Reset ATU (L=0, C=0)
-./atu_gpio.py reset
+# Riavvia servizio
+sudo systemctl restart atu-web
+
+# Verifica logs
+journalctl -u atu-web -f
 ```
 
-## 🔄 Aggiornamento
+### Step 4: Verifica Integrazione
+
 ```bash
-cd /home/pi/atu-controller
-git pull origin main
-npm install
-sudo systemctl restart atu-web rigctld
-```
+# 1. Accedi a interfaccia web
+http://atupi.local:3000
 
-## 📊 Struttura File
-```
-atu-controller/
-├── server.js              # Server Node.js + WebSocket + API v2.0
-├── atu_gpio.py            # GPIO control + binary toggle v2.0
-├── package.json           # Dependencies (v2.0.0)
-├── public/
-│   └── index.html         # Web interface v2.0 (2-column layout)
-├── systemd/
-│   ├── rigctld.service    # Hamlib service
-│   └── atu-web.service    # Web server service v2.0
-├── .gitignore
-└── README.md              # This file
+# 2. Premi pulsante TUNE
+# 3. Verifica nei log:
+journalctl -u atu-web -n 50
+
+# Output atteso:
+# 🎯 Starting tune sequence with antenna switching...
+# 📡 Current antenna: sdr (hf_state=2, relay_ok=true)
+# 🔀 Switching to 590 for tuning...
+# ⏳ Waiting relay switch... (1/10)
+# ✅ Relay confirmed on 590 (relay_ok=true, hf_state=1)
+# ✅ Antenna confirmed on 590, ready to tune
+# [sequenza tuning normale]
+# 🔀 Restoring antenna to sdr...
+# ✅ Antenna restored to sdr
+# ✅ Tune sequence completed
 ```
 
 ## 🐛 Troubleshooting
 
-### Server non parte
+### Errore: "Station Control unreachable"
+
 ```bash
-# Verifica logs
-journalctl -u atu-web -f
-journalctl -u rigctld -f
+# Verifica connettività
+ping radio.local
 
-# Verifica porte
-sudo netstat -tulpn | grep 3000  # Web server
-sudo netstat -tulpn | grep 4532  # rigctld
+# Se mDNS non funziona, usa IP diretto
+# 1. Trova IP di ESP32:
+arp -a | grep radio
+# oppure dal serial monitor ESP32
+
+# 2. Modifica server.js:
+const STATION_CONTROL_URL = 'http://192.168.1.XXX';
+
+# 3. Riavvia
+sudo systemctl restart atu-web
 ```
 
-### Radio non risponde
+### Errore: "Relay switch timeout"
+
 ```bash
-# Test CAT diretto
-telnet localhost 4532
-f          # Leggi frequenza
-l SWR      # Leggi SWR
-q          # Esci
+# 1. Verifica stato relay manualmente
+curl http://radio.local/api/antenna/status
+
+# 2. Verifica logs ESP32 (serial monitor)
+# Cerca messaggi tipo:
+# "🔀 API: Switching to 590 (HF=1)..."
+# "✅ Switched to 590 (relay_ok=true)"
+
+# 3. Se relay_ok=false, possibile problema hardware relay
 ```
 
-### GPIO non funzionano
+### Antenna non ripristina a SDR
+
 ```bash
-# Test singolo comando
-./atu_gpio.py status
+# Verifica manualmente
+curl -X POST http://radio.local/api/antenna/sdr
+curl http://radio.local/api/antenna/status
 
-# Verifica permissions
-ls -l /dev/gpiomem
+# Se relay_ok=true ma antenna non commuta:
+# - Controlla alimentazione relay
+# - Verifica collegamenti GPIO ESP32
 ```
 
-### SWR non viene letto
-```bash
-# Verifica supporto Hamlib
-rigctl -m 2031 -r /dev/ttyUSB0 -s 115200 l SWR
+## 📊 Tempi e Timeout
 
-# Se ritorna 0.0 o errore, il TS-590 potrebbe non supportare
-# il comando SWR via CAT. Verificare firmware radio.
-```
+| Fase | Timeout | Retry |
+|------|---------|-------|
+| Switch antenna 590 | 1s | 10 × 100ms |
+| Tuning ATU | 20s | 40 × 500ms |
+| Restore antenna | 1s | 10 × 100ms |
 
-## 📝 API Endpoints v2.0
-
-### Radio Control
-```
-GET  /api/frequency        # Leggi frequenza
-POST /api/frequency        # Imposta frequenza
-GET  /api/power            # Leggi potenza
-POST /api/power            # Imposta potenza
-POST /api/tx               # TX ON
-POST /api/rx               # TX OFF (Emergency stop)
-GET  /api/tx-status        # Stato TX/RX
-```
-
-### ATU Control
-```
-POST /api/tune             # Tune con freq preset (body: {frequency: Hz})
-POST /api/atu/toggle-mode  # Toggle BYPASS ⟷ AUTO (v2.0)
-POST /api/atu/bypass       # Toggle BYPASS (legacy)
-POST /api/atu/reset        # Reset ATU (L=0, C=0)
-GET  /api/atu/status       # Stato tuning
-GET  /api/atu/fullstatus   # Stato completo con modalità
-```
-
-### Example: Tune con preset
-```bash
-curl -X POST http://<your-pi>.local:3000/api/tune \
-  -H "Content-Type: application/json" \
-  -d '{"frequency": 1830000}'
-
-# Response:
-# {
-#   "ok": true,
-#   "message": "Tune OK!",
-#   "tuned": true,
-#   "swr": "1.2"
-# }
-```
+**Totale sequenza normale:** ~25-30 secondi
 
 ## 🔐 Sicurezza
 
-**ATTENZIONE:** Questa interfaccia NON ha autenticazione. 
+### Protezione contro errori
 
-Per uso su rete pubblica, aggiungi:
-- Firewall per limitare accesso
-- Reverse proxy con autenticazione (nginx + basic auth)
-- VPN per accesso remoto sicuro
+1. **Relay non conferma** → ABORT tuning, NO TX
+2. **Station Control offline** → ABORT tuning
+3. **Errore durante tuning** → Emergency cleanup:
+   - TX OFF
+   - Mode restore
+   - Power restore
+   - Antenna restore (se possibile)
 
-## 📋 Changelog
+### Test consigliati
 
-### v2.0.0 (2025-01-xx)
-- ✨ Preset tune buttons (160m, 80m, 40m)
-- ✨ SWR reading via CAT durante tuning
-- ✨ Binary BYPASS/AUTO toggle (removed MANUAL)
-- ✨ Emergency TX stop button
-- ✨ Antenna matrix 2×2 (VERTICAL/LONG WIRE + 590/SDR)
-- 🎨 New 2-column responsive layout
-- 🐛 Fixed frequency restoration after tune
-- 🐛 Improved error handling with emergency cleanup
+```bash
+# 1. Test con Station Control offline
+sudo systemctl stop apache2  # o ferma ESP32
+# Premi TUNE → deve fallire con errore chiaro
 
-### v1.0.0 (2024-12-xx)
-- Initial release
-- Basic ATU control via GPIO
-- TS-590 CAT integration
-- WebSocket real-time updates
+# 2. Test con antenna già su 590
+curl -X POST http://radio.local/api/antenna/590
+# Premi TUNE → deve procedere senza switch
 
-## 📄 Licenza
+# 3. Test ripristino su errore
+# Durante tuning, premi Ctrl+C su journalctl
+# Verifica che antenna torni su originale
+```
 
-MIT License - Vedi file LICENSE
+## 📝 Log Analysis
 
-## 🙏 Crediti
+Esempi di log corretti:
 
-- ATU-100 firmware: [N7DDC/Dfinitski](https://github.com/Dfinitski/N7DDC-ATU-100-mini-and-extended-boards)
-- Hamlib: [Hamlib Project](https://hamlib.github.io/)
+### Sequenza completa con switch
+```
+🎯 Starting tune sequence with antenna switching...
+📡 Current antenna: sdr (hf_state=2, relay_ok=true)
+🔀 Switching to 590 for tuning...
+✅ Relay confirmed on 590 (relay_ok=true, hf_state=1)
+💾 Saved TS-590 config: Mode=USB, Power=0.50
+⚡ Setting power to 10W
+📻 Switching to FSK mode
+📻 TX ON (FSK carrier)
+🎛️ Triggering ATU tune...
+⏳ Waiting for tune completion (max 20s)...
+✅ Tuning completed!
+📻 TX OFF
+📻 Restoring mode: USB
+⚡ Restoring power
+🔀 Restoring antenna to sdr...
+✅ Antenna restored to sdr
+✅ Tune sequence completed
+```
 
-## 📮 Contatti
+### Sequenza senza switch (già su 590)
+```
+🎯 Starting tune sequence with antenna switching...
+📡 Current antenna: 590 (hf_state=1, relay_ok=true)
+✅ Already on 590, proceeding
+[normale sequenza tune]
+✅ Tune sequence completed
+```
 
-- **Author**: Frank (IU0AVT)
-- **GitHub**: [@frank-ydf](https://github.com/frank-ydf)
-- **Project**: [atu-controller](https://github.com/frank-ydf/atu-controller)
+## 🎯 Vantaggi
+
+✅ **Sicurezza**: Conferma relay PRIMA di trasmettere  
+✅ **Automatismo**: Zero intervento manuale  
+✅ **Robustezza**: Retry automatico e cleanup su errori  
+✅ **Trasparenza**: Log dettagliati per debug  
+✅ **Reversibilità**: Ripristino automatico stato originale  
+
+## 📞 Supporto
+
+GitHub: https://github.com/frank-ydf/atu-controller
+Branch: `integrated`
+
+Per bug o feature request, apri una Issue su GitHub.
 
 ---
 
-**73 de IU0AVT!** 📻
+**73 de IU0AVT**
