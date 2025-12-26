@@ -1,10 +1,8 @@
-require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const net = require('net');
 const { exec } = require('child_process');
-const axios = require('axios');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,15 +11,8 @@ const io = socketIo(server);
 app.use(express.static('public'));
 app.use(express.json());
 
-// Configuration endpoint
-app.get('/api/config', (req, res) => {
-  res.json({
-    stationControlUrl: STATION_CONTROL_URL
-  });
-});
-
-// Station Control configuration
-const STATION_CONTROL_URL = process.env.STATION_CONTROL_URL || 'http://radio.local';
+// Configurazione Station Control
+const STATION_CONTROL_URL = 'http://radio.local';  // o IP diretto se mDNS non funziona
 
 // Connessione rigctld
 let rigSocket = null;
@@ -76,6 +67,49 @@ function rigCommand(cmd) {
   });
 }
 
+// ============================================================================
+// NUOVO: Helper per verifica switch relay con retry e feedback
+// ============================================================================
+async function waitForAntennaSwitch(expectedAntenna, maxRetries = 10) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const response = await fetch(`${STATION_CONTROL_URL}/api/antenna/status`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Verifica sia lo stato logico che il relay fisico
+      if (data.selected === expectedAntenna && data.relay_ok === true) {
+        console.log(`✅ Relay confirmed on ${expectedAntenna} (relay_ok=true, hf_state=${data.hf_state})`);
+        return true;
+      }
+      
+      console.log(`⏳ Waiting relay switch... (${i+1}/${maxRetries}) - selected=${data.selected}, relay_ok=${data.relay_ok}`);
+      await new Promise(r => setTimeout(r, 100)); // 100ms tra tentativi
+      
+    } catch (err) {
+      console.warn(`⚠️  Status check failed (${i+1}/${maxRetries}): ${err.message}`);
+      
+      // Se è l'ultimo tentativo, propaghiamo l'errore
+      if (i === maxRetries - 1) {
+        throw new Error(`Station Control unreachable: ${err.message}`);
+      }
+    }
+    
+    await new Promise(r => setTimeout(r, 100));
+  }
+  
+  console.error('❌ Relay switch timeout!');
+  return false;
+}
+
+// ============================================================================
+// API ENDPOINTS
+// ============================================================================
+
 // API: Get frequency
 app.get('/api/frequency', async (req, res) => {
   try {
@@ -91,6 +125,17 @@ app.post('/api/frequency', async (req, res) => {
   try {
     await rigCommand(`F ${req.body.frequency}`);
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Get mode
+app.get('/api/mode', async (req, res) => {
+  try {
+    const resp = await rigCommand('m');
+    const mode = resp.split('\n')[0];
+    res.json({ mode: mode });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -128,7 +173,7 @@ app.post('/api/tx', async (req, res) => {
   }
 });
 
-// API: RX (Emergency stop)
+// API: RX
 app.post('/api/rx', async (req, res) => {
   try {
     await rigCommand('T 0');
@@ -149,7 +194,38 @@ app.get('/api/tx-status', async (req, res) => {
   }
 });
 
-// API: ATU status
+// ============================================================================
+// ATU CONTROL ENDPOINTS
+// ============================================================================
+
+app.post('/api/atu/auto', (req, res) => {
+  exec('/home/pi/atu-controller/atu_gpio.py auto', (err, stdout) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true, output: stdout });
+  });
+});
+
+app.post('/api/atu/tune', (req, res) => {
+  exec('/home/pi/atu-controller/atu_gpio.py tune', (err, stdout) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true, output: stdout });
+  });
+});
+
+app.post('/api/atu/bypass', (req, res) => {
+  exec('/home/pi/atu-controller/atu_gpio.py bypass', (err, stdout) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true, output: stdout });
+  });
+});
+
+app.post('/api/atu/reset', (req, res) => {
+  exec('/home/pi/atu-controller/atu_gpio.py reset', (err, stdout) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true, output: stdout });
+  });
+});
+
 app.get('/api/atu/status', (req, res) => {
   exec('/home/pi/atu-controller/atu_gpio.py status', (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -178,248 +254,274 @@ app.get('/api/atu/fullstatus', (req, res) => {
     exec('/home/pi/atu-controller/atu_gpio.py status', (err2, stdout2) => {
       const isTuning = stdout2 ? stdout2.includes('TUNING') : false;
       
+      // Determina simbolo display
+      let displaySymbol;
+      if (bypassMode) {
+        displaySymbol = '_';  // Bypass
+      } else if (autoMode) {
+        displaySymbol = ' ';  // Auto (niente)
+      } else {
+        displaySymbol = '.';  // Manuale (punto)
+      }
+      
       res.json({
         tuning: isTuning,
         auto: autoMode,
         bypass: bypassMode,
-        mode: bypassMode ? 'BYPASS' : 'AUTO'
+        display: displaySymbol,
+        mode: bypassMode ? 'BYPASS' : (autoMode ? 'AUTO' : 'MANUAL')
       });
     });
   });
 });
 
-// API: Toggle BYPASS/AUTO mode (binary toggle)
-app.post('/api/atu/toggle-mode', (req, res) => {
-  exec('/home/pi/atu-controller/atu_gpio.py auto', (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message });
-    
-    // Read new state
-    exec('/home/pi/atu-controller/atu_gpio.py state', (err2, stdout2) => {
-      const isAuto = stdout2.includes('AUTO=true') || stdout2.includes('AUTO=True');
-      res.json({ 
-        ok: true, 
-        mode: isAuto ? 'auto' : 'bypass',
-        output: stdout 
-      });
-    });
-  });
-});
-
-// API: Bypass (legacy compatibility)
-app.post('/api/atu/bypass', (req, res) => {
-  exec('/home/pi/atu-controller/atu_gpio.py bypass', (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ ok: true, output: stdout });
-  });
-});
-
-// API: Reset
-app.post('/api/atu/reset', (req, res) => {
-  exec('/home/pi/atu-controller/atu_gpio.py reset', (err, stdout) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ ok: true, output: stdout });
-  });
-});
-
-// API: Full tune sequence with preset frequency
+// ============================================================================
+// API: Full tune sequence (CON ANTENNA SWITCHING E RELAY VERIFICATION)
+// ============================================================================
 app.post('/api/tune', async (req, res) => {
-  const targetFreq = req.body.frequency; // Frequency in Hz
-  console.log(`🎯 Starting tune sequence on ${targetFreq} Hz...`);
+  console.log('🎯 Starting tune sequence with antenna switching...');
   
   let originalMode = null;
   let originalPower = null;
-  let originalFreq = null;
-  let finalSWR = null;
+  let originalAntenna = null;
+  let stationControlAvailable = true;
   
   try {
-    // 1. Save current configuration
+    // 0. NUOVO: Salva antenna corrente e switch a 590
+    try {
+      const antennaStatusResponse = await fetch(`${STATION_CONTROL_URL}/api/antenna/status`);
+      
+      if (!antennaStatusResponse.ok) {
+        throw new Error(`Station Control HTTP ${antennaStatusResponse.status}`);
+      }
+      
+      const antennaData = await antennaStatusResponse.json();
+      originalAntenna = antennaData.selected;
+      
+      console.log(`📡 Current antenna: ${originalAntenna} (hf_state=${antennaData.hf_state}, relay_ok=${antennaData.relay_ok})`);
+      
+      if (originalAntenna !== '590') {
+        console.log('🔀 Switching to 590 for tuning...');
+        
+        const switchResponse = await fetch(`${STATION_CONTROL_URL}/api/antenna/590`, { 
+          method: 'POST' 
+        });
+        
+        if (!switchResponse.ok) {
+          throw new Error(`Switch failed: HTTP ${switchResponse.status}`);
+        }
+        
+        // ATTESA CONFERMA RELAY (max 1s = 10 tentativi x 100ms)
+        const switched = await waitForAntennaSwitch('590', 10);
+        
+        if (!switched) {
+          throw new Error('Relay switch to 590 timeout');
+        }
+        
+        console.log('✅ Antenna confirmed on 590, ready to tune');
+        
+      } else {
+        console.log('✅ Already on 590, proceeding');
+      }
+      
+    } catch (err) {
+      console.error('❌ Antenna switch error:', err.message);
+      stationControlAvailable = false;
+      
+      // ABORT se lo switch è critico
+      return res.status(500).json({ 
+        error: 'Antenna switch failed - ABORT tuning', 
+        details: err.message,
+        suggestion: 'Check Station Control availability at ' + STATION_CONTROL_URL
+      });
+    }
+    
+    // 1. Salva configurazione attuale TS-590
     const modeResp = await rigCommand('m');
     originalMode = modeResp.split('\n')[0];
     originalPower = await rigCommand('l RFPOWER');
-    originalFreq = await rigCommand('f');
-    console.log(`💾 Saved: Freq=${originalFreq}, Mode=${originalMode}, Power=${originalPower}`);
+    console.log(`💾 Saved TS-590 config: Mode=${originalMode}, Power=${originalPower}`);
     
-    // 2. Set target frequency
-    console.log(`📻 Setting frequency to ${targetFreq} Hz`);
-    await rigCommand(`F ${targetFreq}`);
-    await new Promise(r => setTimeout(r, 500));
-    
-    // 3. Set tune power (10W)
+    // 2. Set potenza tune (10W)
     console.log('⚡ Setting power to 10W');
     await rigCommand('L RFPOWER 0.10');
     await new Promise(r => setTimeout(r, 500));
     
-    // 4. Switch to FSK mode (RTTY)
+    // 3. Passa a FSK mode (RTTY)
     console.log('📻 Switching to FSK mode');
     await rigCommand('M RTTY 0');
     await new Promise(r => setTimeout(r, 800));
     
-    // 5. TX ON (FSK generates carrier automatically)
+    // 4. TX ON (in FSK trasmette automaticamente tono!)
     console.log('📻 TX ON (FSK carrier)');
     await rigCommand('T 1');
-    await new Promise(r => setTimeout(r, 2000)); // Wait for stabilization
+    await new Promise(r => setTimeout(r, 2000)); // Aspetta stabilizzazione carrier
     
-    // 6. Trigger ATU tune
-    console.log('🎛️ Triggering ATU...');
+    // 5. Trigger ATU tune
+    console.log('🎛️ Triggering ATU tune...');
     await new Promise((resolve, reject) => {
       exec('/home/pi/atu-controller/atu_gpio.py tune', (err, stdout) => {
-        console.log('ATU:', stdout);
+        console.log('ATU output:', stdout.trim());
         if (err) reject(err);
         else resolve();
       });
     });
     
-    // Wait for pulse to complete
+    // 6. Aspetta che il pulse finisca completamente
     await new Promise(r => setTimeout(r, 1000));
     
-    // 7. Wait for tune completion (smart polling)
-    console.log('⏳ Waiting for tune...');
+    // 7. Aspetta tune (max 20s)
+    console.log('⏳ Waiting for tune completion (max 20s)...');
     let tuned = false;
-    for (let i = 0; i < 20; i++) {
-      await new Promise(r => setTimeout(r, 1000));
+    
+    for (let i = 0; i < 40; i++) {
+      await new Promise(r => setTimeout(r, 500));
       
       const statusCheck = await new Promise((resolve) => {
         exec('/home/pi/atu-controller/atu_gpio.py status', (err, stdout) => {
-          resolve(stdout ? !stdout.includes('TUNING') : true);
+          if (err || !stdout) {
+            resolve(false);
+          } else {
+            resolve(!stdout.includes('TUNING'));
+          }
         });
       });
       
       if (statusCheck) {
         tuned = true;
-        console.log('✅ Tune completed');
+        console.log('✅ Tuning completed!');
         break;
       }
     }
     
-    // 8. Read SWR before turning off TX
-    try {
-      const swrResp = await rigCommand('l SWR');
-      finalSWR = parseFloat(swrResp).toFixed(1);
-      console.log(`📊 Final SWR: ${finalSWR}`);
-    } catch (err) {
-      console.log('⚠️ Could not read SWR:', err.message);
-      finalSWR = null;
+    if (!tuned) {
+      console.warn('⚠️  Tuning timeout (ATU still tuning after 20s)');
     }
     
-    // 9. TX OFF
+    // 8. TX OFF
     console.log('📻 TX OFF');
     await rigCommand('T 0');
     await new Promise(r => setTimeout(r, 500));
     
-    // 10. Restore original frequency
-    console.log(`📻 Restoring frequency: ${originalFreq}`);
-    await rigCommand(`F ${originalFreq}`);
-    await new Promise(r => setTimeout(r, 300));
-    
-    // 11. Restore original mode
+    // 9. Ripristina mode originale
     console.log(`📻 Restoring mode: ${originalMode}`);
     await rigCommand(`M ${originalMode} 0`);
     await new Promise(r => setTimeout(r, 300));
     
-    // 12. Restore power
+    // 10. Ripristina potenza
     console.log('⚡ Restoring power');
     await rigCommand(`L RFPOWER ${originalPower}`);
     
-    console.log('✅ Sequence completed');
+    // 11. NUOVO: Ripristina antenna se necessario
+    if (stationControlAvailable && originalAntenna && originalAntenna !== '590') {
+      console.log(`🔀 Restoring antenna to ${originalAntenna}...`);
+      
+      try {
+        const restoreResponse = await fetch(`${STATION_CONTROL_URL}/api/antenna/${originalAntenna}`, { 
+          method: 'POST' 
+        });
+        
+        if (!restoreResponse.ok) {
+          throw new Error(`Restore failed: HTTP ${restoreResponse.status}`);
+        }
+        
+        // Verifica switch
+        const restored = await waitForAntennaSwitch(originalAntenna, 10);
+        
+        if (restored) {
+          console.log(`✅ Antenna restored to ${originalAntenna}`);
+        } else {
+          console.warn(`⚠️  Antenna restore timeout (check manually)`);
+        }
+        
+      } catch (err) {
+        console.error('❌ Antenna restore error:', err.message);
+      }
+    }
+    
+    console.log('✅ Tune sequence completed');
     
     res.json({ 
       ok: true, 
-      message: tuned ? 'Tune OK!' : 'Timeout',
+      message: tuned ? 'Tuning completed successfully' : 'Tuning timeout (check antenna)',
       tuned: tuned,
-      swr: finalSWR
+      antenna_switched: stationControlAvailable,
+      antenna_restored: originalAntenna !== '590'
     });
     
   } catch (err) {
-    console.error('❌ Error:', err);
+    console.error('❌ Tune sequence error:', err.message);
     
     // Emergency cleanup
     try {
-      console.log('🚨 Emergency cleanup');
-      await rigCommand('T 0'); // TX OFF
+      console.log('🚨 Emergency cleanup...');
       
-      if (originalFreq) {
-        await rigCommand(`F ${originalFreq}`);
-      }
+      // TX OFF
+      await rigCommand('T 0');
+      console.log('  ✓ TX OFF');
+      
+      // Restore mode
       if (originalMode) {
         await rigCommand(`M ${originalMode} 0`);
+        console.log(`  ✓ Mode restored: ${originalMode}`);
       }
+      
+      // Restore power
       if (originalPower) {
         await rigCommand(`L RFPOWER ${originalPower}`);
+        console.log('  ✓ Power restored');
       }
-    } catch {}
+      
+      // NUOVO: Ripristina antenna anche in caso di errore
+      if (stationControlAvailable && originalAntenna && originalAntenna !== '590') {
+        try {
+          console.log(`  ⚠️  Attempting antenna restore to ${originalAntenna}...`);
+          await fetch(`${STATION_CONTROL_URL}/api/antenna/${originalAntenna}`, { 
+            method: 'POST' 
+          });
+          await waitForAntennaSwitch(originalAntenna, 5);
+          console.log('  ✓ Antenna restored');
+        } catch (restoreErr) {
+          console.error('  ✗ Antenna restore failed:', restoreErr.message);
+        }
+      }
+      
+    } catch (cleanupErr) {
+      console.error('  ✗ Cleanup error:', cleanupErr.message);
+    }
     
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ============================================================================
-// STATION CONTROL PROXY APIs
-// ============================================================================
-
-// Get station control status and state
-app.get('/api/station/status', async (req, res) => {
-  try {
-    const response = await axios.get(`${STATION_CONTROL_URL}/getstate`, { timeout: 2000 });
-    res.json({
-      online: true,
-      state: response.data
-    });
-  } catch (err) {
-    res.json({
-      online: false,
-      state: { antenna: 0, hf: 0, vuhf: 0 }
-    });
-  }
-});
-
-// Send control command to station control
-app.post('/api/station/control', async (req, res) => {
-  const { cmd, val } = req.body;
-  
-  try {
-    // Send command to Station Control
-    await axios.post(`${STATION_CONTROL_URL}/control`, null, {
-      params: { cmd, val },
-      timeout: 2000
-    });
-    
-    // Get updated state
-    const response = await axios.get(`${STATION_CONTROL_URL}/getstate`, { timeout: 2000 });
-    
-    res.json({
-      ok: true,
-      state: response.data
-    });
-  } catch (err) {
-    console.error('Station Control error:', err.message);
-    res.status(500).json({
-      ok: false,
-      error: err.message
+    res.status(500).json({ 
+      error: err.message,
+      phase: 'tune_sequence',
+      cleanup_attempted: true
     });
   }
 });
 
 // ============================================================================
-// WEBSOCKET UPDATES
-// ============================================================================
-
 // WebSocket updates
+// ============================================================================
 io.on('connection', (socket) => {
   console.log('📱 Client connected');
   
   const interval = setInterval(async () => {
     try {
       const freq = await rigCommand('f');
+      const mode = await rigCommand('m');
+      const powerResp = await rigCommand('l RFPOWER');
+      const power = Math.round(parseFloat(powerResp) * 100);
       const pttResp = await rigCommand('t');
       const ptt = parseInt(pttResp);
       
       socket.emit('update', { 
         frequency: parseInt(freq),
+        mode: mode.split('\n')[0],
+        power: power,
         txStatus: ptt === 1 ? 'TX' : 'RX',
         timestamp: Date.now()
       });
     } catch (err) {
-      // Ignore
+      // Ignore errors in WebSocket updates
     }
   }, 1000);
   
@@ -429,10 +531,20 @@ io.on('connection', (socket) => {
   });
 });
 
+// ============================================================================
+// Server startup
+// ============================================================================
 const PORT = 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  const hostname = require('os').hostname();
-  console.log(`🚀 ATU Controller v2.0-integrated on http://0.0.0.0:${PORT}`);
-  console.log(`   Access at: http://${hostname}.local:${PORT}`);
-  console.log(`📡 Station Control URL: ${STATION_CONTROL_URL}`);
+  console.log('════════════════════════════════════════════════════════');
+  console.log('🚀 ATU Controller Server');
+  console.log('════════════════════════════════════════════════════════');
+  console.log(`   Web Interface:      http://0.0.0.0:${PORT}`);
+  console.log(`   Station Control:    ${STATION_CONTROL_URL}`);
+  console.log('════════════════════════════════════════════════════════');
+  console.log('Features:');
+  console.log('  ✓ Automatic antenna switching (590/SDR)');
+  console.log('  ✓ Relay feedback verification');
+  console.log('  ✓ Emergency restore on errors');
+  console.log('════════════════════════════════════════════════════════\n');
 });
