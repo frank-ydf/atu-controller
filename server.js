@@ -190,15 +190,16 @@ app.get('/api/atu/fullstatus', (req, res) => {
 
 // API: Toggle BYPASS/AUTO mode (binary toggle)
 app.post('/api/atu/toggle-mode', (req, res) => {
-  exec('/home/pi/atu-controller/atu_gpio.py auto', (err, stdout) => {
+  // Toggle BYPASS ⟷ AUTO using RB2 (cycle)
+  exec('/home/pi/atu-controller/atu_gpio.py bypass', (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
     
     // Read new state
     exec('/home/pi/atu-controller/atu_gpio.py state', (err2, stdout2) => {
-      const isAuto = stdout2.includes('AUTO=true') || stdout2.includes('AUTO=True');
+      const isBypass = stdout2.includes('BYPASS=true') || stdout2.includes('BYPASS=True');
       res.json({ 
         ok: true, 
-        mode: isAuto ? 'auto' : 'bypass',
+        mode: isBypass ? 'bypass' : 'auto',
         output: stdout 
       });
     });
