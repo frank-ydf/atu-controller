@@ -37,8 +37,25 @@ def load_state():
                 'bypass': parts[1] == 'BYPASS'
             }
     except:
-        # Default: AUTO mode (no bypass)
-        return {'auto': True, 'bypass': False}
+        # Default: BYPASS mode (safe startup)
+        return {'auto': False, 'bypass': True}
+
+def init_state():
+    """
+    Inizializza ATU allo startup in modo sicuro
+    Forza BYPASS mode per sicurezza
+    """
+    print("🔧 Initializing ATU to safe state (BYPASS)...")
+    
+    # Forza BYPASS mode
+    pulse_button(BYP_PIN, 0.30)
+    time.sleep(0.5)
+    
+    # Salva stato BYPASS
+    state = {'auto': False, 'bypass': True}
+    save_state(state)
+    
+    print("✅ ATU initialized to BYPASS mode")
 
 def save_state(state):
     """Salva stato"""
@@ -140,7 +157,7 @@ def cleanup():
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: atu_gpio.py [tune|auto|bypass|reset|status|state]")
+        print("Usage: atu_gpio.py [tune|auto|bypass|reset|status|state|init]")
         sys.exit(1)
     
     cmd = sys.argv[1].lower()
@@ -158,6 +175,8 @@ if __name__ == "__main__":
             cmd_status()
         elif cmd == "state":
             cmd_get_state()
+        elif cmd == "init":
+            init_state()
         else:
             print(f"❌ Unknown command: {cmd}")
             sys.exit(1)
