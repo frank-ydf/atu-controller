@@ -232,6 +232,19 @@ app.post('/api/tune', async (req, res) => {
   let finalSWR = null;
   
   try {
+    // 0. Switch antenna to 590 (RTX HF) for tuning
+    console.log('🔀 Switching antenna to 590 (RTX HF)...');
+    try {
+      await axios.post(`${STATION_CONTROL_URL}/control`, {
+        cmd: 'hf',
+        val: 1  // 590 = hf:1
+      });
+      console.log('✅ Antenna switched to 590');
+      await new Promise(r => setTimeout(r, 1000)); // Wait for relay
+    } catch (err) {
+      console.log('⚠️ Station Control not available, continuing anyway...');
+    }
+    
     // 1. Save current configuration
     const modeResp = await rigCommand('m');
     originalMode = modeResp.split('\n')[0];
