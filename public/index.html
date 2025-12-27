@@ -526,7 +526,7 @@
   <script>
     const socket = io();
     let connected = false;
-    let currentMode = 'bypass'; // 'bypass' or 'auto'
+    let currentMode = 'bypass'; // 'bypass', 'auto', or 'manual'
     let lastSWR = '--';
     let stationControlOnline = false;
     let STATION_CONTROL_URL = ''; // Will be loaded from backend config
@@ -641,8 +641,12 @@
         const res = await fetch('/api/atu/toggle-mode', { method: 'POST' });
         const data = await res.json();
         
-        currentMode = data.mode; // 'bypass' or 'auto'
+        // Update mode from response ('bypass', 'auto', or potentially 'manual')
+        currentMode = data.mode;
         updateModeDisplay();
+        
+        // Immediately refresh full status to get accurate state
+        setTimeout(updateATUStatus, 500);
         
       } catch (err) {
         console.error('Error toggling mode:', err);
@@ -651,10 +655,14 @@
     
     function updateModeDisplay() {
       const toggle = document.getElementById('mode-toggle');
-      if (currentMode === 'auto') {
-        toggle.classList.add('auto');
-      } else {
+      
+      // BYPASS shows toggle left, AUTO/MANUAL show toggle right
+      // (MANUAL is visually same as AUTO since toggle is binary BYPASS⟷AUTO)
+      if (currentMode === 'bypass') {
         toggle.classList.remove('auto');
+      } else {
+        // AUTO or MANUAL → show as AUTO (toggle right)
+        toggle.classList.add('auto');
       }
     }
     
@@ -664,11 +672,13 @@
         const res = await fetch('/api/atu/fullstatus');
         const data = await res.json();
         
-        // Update mode from backend
+        // Update mode from backend (3 states)
         if (data.bypass) {
           currentMode = 'bypass';
-        } else {
+        } else if (data.auto) {
           currentMode = 'auto';
+        } else {
+          currentMode = 'manual';  // NEW: handle MANUAL state
         }
         updateModeDisplay();
         
