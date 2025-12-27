@@ -232,17 +232,22 @@ app.post('/api/tune', async (req, res) => {
   let finalSWR = null;
   
   try {
-    // 0. Switch antenna to 590 (RTX HF) for tuning
-    console.log('🔀 Switching antenna to 590 (RTX HF)...');
+    // 0. Switch to 590 (RTX HF) for tuning using dedicated ESP32 endpoint
+    console.log('🔀 Switching to 590 (RTX HF)...');
     try {
-      await axios.post(`${STATION_CONTROL_URL}/control`, {
-        cmd: 'hf',
-        val: 1  // 590 = hf:1
-      });
-      console.log('✅ Antenna switched to 590');
-      await new Promise(r => setTimeout(r, 1000)); // Wait for relay
+      const switchResp = await axios.post(`${STATION_CONTROL_URL}/api/antenna/590`);
+      const switchData = switchResp.data;
+      
+      if (switchData.ok && switchData.relay_ok) {
+        console.log('✅ Switched to 590, relays confirmed');
+      } else {
+        console.log('⚠️ Switched to 590, but relay feedback uncertain');
+      }
+      
+      await new Promise(r => setTimeout(r, 1000)); // Wait for relay settling
     } catch (err) {
-      console.log('⚠️ Station Control not available, continuing anyway...');
+      console.log('⚠️ Station Control not available:', err.message);
+      console.log('⚠️ Continuing with tune anyway (manual antenna selection required)...');
     }
     
     // 1. Save current configuration
@@ -390,9 +395,15 @@ app.post('/api/station/control', async (req, res) => {
   const { cmd, val } = req.body;
   
   try {
-    // Send command to Station Control
-    await axios.post(`${STATION_CONTROL_URL}/control`, null, {
-      params: { cmd, val },
+    // Send command to Station Control using x-www-form-urlencoded
+    const params = new URLSearchParams();
+    params.append('cmd', cmd);
+    params.append('val', val);
+    
+    await axios.post(`${STATION_CONTROL_URL}/control`, params, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
       timeout: 2000
     });
     

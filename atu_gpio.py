@@ -9,11 +9,12 @@ import time
 import sys
 import os
 
-# Pin GPIO (BCM numbering)
-TUNE_PIN = 17
-BYP_PIN = 27
-AUTO_PIN = 10
-TXREQ_PIN = 22
+# Pin GPIO (BCM numbering) - CORRECTED MAPPING
+# Based on ATU-100 schematic: RB1=AUTO, RB2=BYPASS
+AUTO_PIN = 17    # GPIO17 (Pin 11) → RB1 (AUTO button)
+BYP_PIN = 27     # GPIO27 (Pin 13) → RB2 (BYPASS button)  
+TUNE_PIN = 10    # GPIO10 (Pin 19) → RB3 (TUNE/RESET button)
+TXREQ_PIN = 22   # GPIO22 (Pin 15) ← RA7 (Tx_req monitor)
 
 # File stato
 STATE_FILE = '/tmp/atu_state.txt'
@@ -43,11 +44,18 @@ def load_state():
 def init_state():
     """
     Inizializza ATU allo startup in modo sicuro
-    Forza BYPASS mode per sicurezza
-    """
-    print("🔧 Initializing ATU to safe state (BYPASS)...")
     
-    # Forza BYPASS mode
+    ATU-100 parte di default in AUTO mode (. sul display).
+    RB2 (BYPASS button) fa toggle diretto: AUTO (.) ⟷ BYPASS (_)
+    
+    Per andare in BYPASS:
+    - Se ATU è in AUTO (.) → premi RB2 una volta → BYPASS (_)
+    """
+    print("🔧 Initializing ATU to safe state...")
+    print("    Assuming ATU starts in AUTO mode (.)")
+    
+    # Step 1: Premi BYPASS per andare da AUTO → BYPASS
+    print("    Step 1: Toggling AUTO → BYPASS...")
     pulse_button(BYP_PIN, 0.30)
     time.sleep(0.5)
     
@@ -55,7 +63,7 @@ def init_state():
     state = {'auto': False, 'bypass': True}
     save_state(state)
     
-    print("✅ ATU initialized to BYPASS mode")
+    print("✅ ATU initialized to BYPASS mode (_)")
 
 def save_state(state):
     """Salva stato"""
@@ -85,37 +93,69 @@ def cmd_reset():
 
 def cmd_auto():
     """
-    Toggle AUTO/BYPASS mode (v2.0 simplified)
-    BYPASS → AUTO → BYPASS
+    Toggle AUTO mode (usando RB1)
+    
+    Comportamento reale:
+    - MANUAL (niente) → [RB1] → AUTO (.)
+    - AUTO (.) → [RB1] → MANUAL (niente)
+    - BYPASS (_) → [RB1] → nessun effetto (BYPASS blocca AUTO)
+    """
+    state = load_state()
+    
+    # Se siamo in BYPASS, RB1 non ha effetto
+    if state['bypass']:
+        print("⚠️  Cannot toggle AUTO while in BYPASS mode")
+        print("    Use 'bypass' command first to exit BYPASS")
+        return
+    
+    # Toggle AUTO
+    state['auto'] = not state['auto']
+    
+    if state['auto']:
+        print("🤖 Enabling AUTO mode (.)")
+    else:
+        print("✋ Disabling AUTO mode (→ MANUAL)")
+    
+    pulse_button(AUTO_PIN, 0.30)
+    save_state(state)
+    
+    if state['auto']:
+        print("✅ Mode: AUTO (.)")
+    else:
+        print("✅ Mode: MANUAL (no symbol)")
+
+
+def cmd_bypass():
+    """
+    Toggle BYPASS ⟷ AUTO (usando RB2)
+    
+    Comportamento reale scoperto:
+    - AUTO (.) → [RB2] → BYPASS (_)
+    - BYPASS (_) → [RB2] → AUTO (.)
+    
+    RB2 cicla tra AUTO e BYPASS, non passa per MANUAL
     """
     state = load_state()
     
     if state['bypass']:
-        # Currently in BYPASS, switch to AUTO
-        print("🔄 Switching from BYPASS to AUTO...")
-        pulse_button(BYP_PIN, 0.30)  # Disable bypass
+        # BYPASS → AUTO
+        print("🔄 BYPASS (_) → AUTO (.)")
+        pulse_button(BYP_PIN, 0.30)
         state['bypass'] = False
         state['auto'] = True
     else:
-        # Currently in AUTO, switch to BYPASS
-        print("🔄 Switching from AUTO to BYPASS...")
-        pulse_button(BYP_PIN, 0.30)  # Enable bypass
+        # AUTO o MANUAL → BYPASS  
+        print("🔄 AUTO/MANUAL → BYPASS (_)")
+        pulse_button(BYP_PIN, 0.30)
         state['bypass'] = True
         state['auto'] = False
     
     save_state(state)
-    print(f"✅ Mode: {'BYPASS' if state['bypass'] else 'AUTO'}")
-
-def cmd_bypass():
-    """Toggle BYPASS mode (legacy compatibility)"""
-    state = load_state()
-    state['bypass'] = not state['bypass']
     
-    print(f"⏸️  Toggling BYPASS: {'ON' if state['bypass'] else 'OFF'}")
-    pulse_button(BYP_PIN, 0.30)
-    
-    save_state(state)
-    print(f"✅ BYPASS mode: {'ON' if state['bypass'] else 'OFF'}")
+    if state['bypass']:
+        print("✅ Mode: BYPASS (_)")
+    else:
+        print("✅ Mode: AUTO (.)")
 
 def cmd_status():
     """Leggi stato completo"""
@@ -131,10 +171,13 @@ def cmd_status():
     else:
         print("✅ Tuning Status: READY (Tx_req = LOW)")
     
+    # Mostra modalità corretta (3 stati)
     if state['bypass']:
-        print("⏸️  Mode: BYPASS")
+        print("⏸️  Mode: BYPASS (_)")
+    elif state['auto']:
+        print("🤖 Mode: AUTO (.)")
     else:
-        print("🤖 Mode: AUTO")
+        print("✋ Mode: MANUAL (no symbol)")
     
     return {
         'tuning': tuning,

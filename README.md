@@ -48,9 +48,9 @@ Sistema di controllo remoto via web per ATU-100 Extended (7x7) antenna tuner int
 ### Collegamenti GPIO
 ```
 Raspberry Pi → ATU-100:
-GPIO17 (Pin 11) → Opto1 → ATU RB1 (TUNE/RESET)
-GPIO27 (Pin 13) → Opto2 → ATU RB2 (BYPASS)
-GPIO10 (Pin 19) → Opto3 → ATU RB3 (AUTO)
+GPIO17 (Pin 11) → Opto1 → ATU RB1 (AUTO toggle - .)
+GPIO27 (Pin 13) → Opto2 → ATU RB2 (BYPASS toggle - _)
+GPIO10 (Pin 19) → Opto3 → ATU RB3 (TUNE/RESET)
 GPIO22 (Pin 15) ← Divisore ← ATU RA7 (Tx_req monitor)
 GND → ATU GND
 
