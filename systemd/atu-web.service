@@ -6,6 +6,7 @@ After=network.target rigctld.service
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/atu-controller
+ExecStartPre=/home/pi/atu-controller/atu_gpio.py init
 ExecStart=/usr/bin/node /home/pi/atu-controller/server.js
 Restart=always
 RestartSec=5
