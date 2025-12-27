@@ -596,7 +596,7 @@
     
     // Tune with fixed frequency
     async function tuneFrequency(freq) {
-      if (!confirm(`Start tuning on ${freq} kHz?\n\nRadio will transmit at low power.`)) {
+      if (!confirm(`Start tuning on ${freq} kHz?\n\n⚠️ Antenna will switch to 590 (RTX HF)\n📻 Radio will transmit at low power`)) {
         return;
       }
       
