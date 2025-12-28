@@ -231,10 +231,21 @@ app.post('/api/tune', async (req, res) => {
   let originalPower = null;
   let originalFreq = null;
   let finalSWR = null;
+  let originalStationState = null;
   
   try {
-    // 0. Switch to 590 (RTX HF) for tuning using dedicated ESP32 endpoint
-    console.log('🔀 Switching to 590 (RTX HF)...');
+    // 0a. Save current Station Control state
+    console.log('💾 Saving Station Control state...');
+    try {
+      const stateResp = await axios.get(`${STATION_CONTROL_URL}/getstate`, { timeout: 2000 });
+      originalStationState = stateResp.data;
+      console.log(`📊 Original state: hf=${originalStationState.hf}, antenna=${originalStationState.antenna}`);
+    } catch (err) {
+      console.log('⚠️ Could not read Station Control state:', err.message);
+    }
+    
+    // 0b. Switch to 590 (RTX HF) for tuning using dedicated ESP32 endpoint
+    console.log('🔀 Switching to 590 (RTX HF) for tuning...');
     try {
       const switchResp = await axios.post(`${STATION_CONTROL_URL}/api/antenna/590`);
       const switchData = switchResp.data;
@@ -325,10 +336,9 @@ app.post('/api/tune', async (req, res) => {
     await rigCommand('T 0');
     await new Promise(r => setTimeout(r, 500));
     
-    // 10. Restore original frequency
-    console.log(`📻 Restoring frequency: ${originalFreq}`);
-    await rigCommand(`F ${originalFreq}`);
-    await new Promise(r => setTimeout(r, 300));
+    // 10. Keep tuned frequency (visual reminder)
+    console.log(`📻 Staying on tuned frequency: ${targetFreq} Hz`);
+    console.log('💡 Frequency NOT restored - visual reminder of tune frequency');
     
     // 11. Restore original mode
     console.log(`📻 Restoring mode: ${originalMode}`);
@@ -338,6 +348,38 @@ app.post('/api/tune', async (req, res) => {
     // 12. Restore power
     console.log('⚡ Restoring power');
     await rigCommand(`L RFPOWER ${originalPower}`);
+    
+    // 13. Restore Station Control state
+    if (originalStationState) {
+      console.log('🔄 Restoring Station Control state...');
+      try {
+        if (originalStationState.hf === 2) {
+          // Was on SDR, switch back
+          console.log('📡 Restoring to SDR');
+          await axios.post(`${STATION_CONTROL_URL}/api/antenna/sdr`, {}, { timeout: 2000 });
+          await new Promise(r => setTimeout(r, 1000)); // Wait for relay
+          console.log('✅ Restored to SDR');
+        } else if (originalStationState.hf === 1) {
+          // Was already on 590, no change needed
+          console.log('✅ Already on 590 (no change needed)');
+        } else if (originalStationState.hf === 0) {
+          // Was disconnected, disconnect
+          console.log('🔌 Disconnecting HF (original state was OFF)');
+          const params = new URLSearchParams();
+          params.append('cmd', 'hf');
+          params.append('val', '0');
+          await axios.post(`${STATION_CONTROL_URL}/control`, params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 2000
+          });
+          console.log('✅ HF disconnected');
+        }
+      } catch (err) {
+        console.log('⚠️ Could not restore Station Control state:', err.message);
+      }
+    } else {
+      console.log('⚠️ No original state to restore (Station Control was offline)');
+    }
     
     console.log('✅ Sequence completed');
     
@@ -356,14 +398,20 @@ app.post('/api/tune', async (req, res) => {
       console.log('🚨 Emergency cleanup');
       await rigCommand('T 0'); // TX OFF
       
-      if (originalFreq) {
-        await rigCommand(`F ${originalFreq}`);
-      }
+      // Keep frequency (visual reminder even on error)
+      console.log('💡 Keeping tuned frequency (visual reminder)');
+      
       if (originalMode) {
         await rigCommand(`M ${originalMode} 0`);
       }
       if (originalPower) {
         await rigCommand(`L RFPOWER ${originalPower}`);
+      }
+      
+      // Try to restore Station Control state
+      if (originalStationState && originalStationState.hf === 2) {
+        console.log('🔄 Emergency: Restoring to SDR');
+        await axios.post(`${STATION_CONTROL_URL}/api/antenna/sdr`, {}, { timeout: 2000 });
       }
     } catch {}
     
