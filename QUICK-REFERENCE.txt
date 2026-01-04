@@ -1,0 +1,226 @@
+╔════════════════════════════════════════════════════════════╗
+║  ATU-100 Camera Branch - Quick Reference Card             ║
+║  Branch: switch+atu+camera                                 ║
+╚════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🚀 QUICK DEPLOY (5 minutes)                                 │
+└─────────────────────────────────────────────────────────────┘
+
+cd /home/pi
+unzip atu-v2.0-camera-RELEASE.zip -d atu-controller
+cd atu-controller
+npm install
+chmod +x *.py *.sh
+cp .env.example .env
+nano .env  # Set STATION_CONTROL_URL
+
+sudo ./setup-atu-camera.sh
+sudo cp systemd/*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl restart atu-web rigctld motion
+
+firefox http://atupi.local:3000
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🎥 CAMERA SETUP                                             │
+└─────────────────────────────────────────────────────────────┘
+
+Position:     10-15cm from ATU OLED display
+Angle:        Perpendicular (no glare)
+Lighting:     Soft, diffused
+
+Test Stream:  http://atupi.local:8081/?action=stream
+
+Adjust Quality:
+  sudo nano /etc/motion/motion.conf
+  width 800 / height 600 / stream_quality 95
+  sudo systemctl restart motion
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🧪 TEST SEQUENCE                                            │
+└─────────────────────────────────────────────────────────────┘
+
+1. Check Camera:
+   Web UI → ATU Panel → See live stream ✓
+   Status: ● Live (green) ✓
+
+2. Test GPIO:
+   ./atu_gpio.py bypass  → Camera shows _ or . ✓
+   ./atu_gpio.py auto    → Camera shows . or (blank) ✓
+
+3. Test Tune:
+   Web UI → TUNE 40m → Camera shows tuning process ✓
+
+4. Test Station Control:
+   Web UI → Matrix → Switch antenna → ESP32 responds ✓
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📊 VERIFY ALL SERVICES                                      │
+└─────────────────────────────────────────────────────────────┘
+
+systemctl status atu-web     → active (running) ✓
+systemctl status rigctld     → active (running) ✓
+systemctl status motion      → active (running) ✓
+
+curl http://localhost:3000   → Web UI ✓
+curl http://localhost:8081   → Camera stream ✓
+curl http://radio.local/getstate → Station Control ✓
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🎮 WEB UI FEATURES                                          │
+└─────────────────────────────────────────────────────────────┘
+
+TS-590 Panel:
+  • Frequency/Mode/Power display (real-time)
+  • TX/RX status indicator
+
+ATU Panel:
+  • TUNE 160m/80m/40m preset buttons
+  • BYPASS ⟷ AUTO toggle
+  • 📹 Camera live stream ← NEW!
+  • 🔍 Fullscreen camera
+  • 📸 Snapshot download
+
+Antenna Matrix:
+  • 2×2 grid: Vertical/Longwire × 590/SDR
+  • Auto-switch during tune
+  • Offline indicator (red X)
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🔧 TROUBLESHOOTING                                          │
+└─────────────────────────────────────────────────────────────┘
+
+Camera Offline:
+  sudo systemctl restart motion
+  vcgencmd get_camera  # Check detection
+
+Web UI Not Loading:
+  journalctl -u atu-web -n 50
+  node server.js  # Manual start for debug
+
+Station Control Offline:
+  ping radio.local
+  Check .env STATION_CONTROL_URL
+
+GPIO Not Working:
+  ./atu_gpio.py status
+  Check optoisolator connections
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📱 CAMERA CONTROLS                                          │
+└─────────────────────────────────────────────────────────────┘
+
+🔍 Fullscreen:
+   Click button → Camera expands → ESC to exit
+
+📸 Snapshot:
+   Click button → Downloads PNG with timestamp
+   Format: atu-display-2024-12-28T14-30-00.png
+
+Status Indicator:
+   ● Live (green)    = Stream active
+   ● Offline (red)   = Camera disconnected
+
+Auto-Reconnect:
+   Stream drops → Automatic retry (no page refresh)
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📋 TUNE SEQUENCE (with Visual Reminder)                    │
+└─────────────────────────────────────────────────────────────┘
+
+Before:  14.200 MHz USB, SDR
+Click:   TUNE 40m
+During:  7.100 MHz FSK, 590 (auto-switch)
+After:   7.100 MHz USB, SDR (freq NOT restored!)
+
+Camera Shows:
+  • Mode symbol changes (. → blank → .)
+  • L/C values change during tune
+  • SWR display after completion
+
+Station Control:
+  • Saves original state (SDR)
+  • Switches to 590 for tune
+  • Restores SDR after tune ✓
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🎯 PERFORMANCE TARGETS                                      │
+└─────────────────────────────────────────────────────────────┘
+
+CPU Usage:       ~25-30% (Pi 3B)
+RAM Usage:       ~250-300 MB
+Camera Stream:   ~500 Kbps @ 10 FPS
+Latency:         <1 second
+
+Services:
+  atu-web:   ~10% CPU
+  motion:    ~10-15% CPU  
+  rigctld:   ~2% CPU
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🔄 UPDATE PROCEDURE                                         │
+└─────────────────────────────────────────────────────────────┘
+
+cd /home/pi/atu-controller
+./update.sh
+
+# OR manual:
+git pull origin switch+atu+camera
+npm install
+sudo systemctl restart atu-web
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📚 DOCUMENTATION FILES                                      │
+└─────────────────────────────────────────────────────────────┘
+
+CAMERA-DEPLOYMENT-GUIDE.md    Complete deployment guide
+ATU-CAMERA-GUIDE.md            Camera setup & optimization
+TUNE-VISUAL-REMINDER.md        Tune behavior explained
+ATU-BEHAVIOR-DEFINITIVE.md     Button behavior reference
+ESP32-API-REFERENCE.md         Station Control API docs
+README.md                      Project overview
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🌐 ACCESS URLS                                              │
+└─────────────────────────────────────────────────────────────┘
+
+Web UI:              http://atupi.local:3000
+Camera Stream:       http://atupi.local:8081/?action=stream
+Station Control:     http://radio.local
+Hamlib (local):      telnet localhost 4532
+
+┌─────────────────────────────────────────────────────────────┐
+│ ⚡ GPIO QUICK REFERENCE                                     │
+└─────────────────────────────────────────────────────────────┘
+
+GPIO17 (Pin 11) → RB1 → AUTO toggle (.)
+GPIO27 (Pin 13) → RB2 → BYPASS cycle (_)
+GPIO10 (Pin 19) → RB3 → TUNE/RESET
+GPIO22 (Pin 15) ← RA7 ← Tx_req monitor
+
+Commands:
+  ./atu_gpio.py auto     # Toggle AUTO ⟷ MANUAL
+  ./atu_gpio.py bypass   # Cycle BYPASS ⟷ AUTO
+  ./atu_gpio.py tune     # Trigger tune
+  ./atu_gpio.py status   # Read current state
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📞 SUPPORT                                                  │
+└─────────────────────────────────────────────────────────────┘
+
+Logs:     journalctl -u atu-web -f
+          journalctl -u motion -f
+          journalctl -u rigctld -f
+
+Debug:    cd /home/pi/atu-controller
+          node server.js  # Manual start
+
+GitHub:   https://github.com/frank-ydf/atu-controller
+Issues:   https://github.com/frank-ydf/atu-controller/issues
+
+╔════════════════════════════════════════════════════════════╗
+║  Ready to Deploy! 🚀                                       ║
+║  All features tested and documented                        ║
+║  73 de IU0AVT                                              ║
+╚════════════════════════════════════════════════════════════╝

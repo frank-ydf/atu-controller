@@ -1,0 +1,33 @@
+# Node modules
+node_modules/
+package-lock.json
+
+# Environment
+.env
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+/tmp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# State files (runtime)
+/tmp/atu_state.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Backup files
+*.bak
+*.backup

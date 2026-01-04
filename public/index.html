@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATU-100 Remote Controller</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+      min-height: 100vh;
+      color: #ecf0f1;
+    }
+    
+    /* Header */
+    .header {
+      background: rgba(0,0,0,0.3);
+      padding: 15px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid rgba(52, 152, 219, 0.5);
+    }
+    
+    .header h1 {
+      font-size: 1.8em;
+      font-weight: 600;
+    }
+    
+    .header-info {
+      display: flex;
+      gap: 20px;
+      font-size: 0.9em;
+    }
+    
+    .status-badge {
+      padding: 5px 15px;
+      border-radius: 15px;
+      background: rgba(46, 204, 113, 0.2);
+      border: 1px solid #2ecc71;
+    }
+    
+    .status-badge.offline {
+      background: rgba(231, 76, 60, 0.2);
+      border: 1px solid #e74c3c;
+    }
+    
+    /* Main Layout */
+    .container {
+      display: grid;
+      grid-template-columns: 30% 70%;
+      gap: 20px;
+      padding: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .left-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    /* Panels */
+    .panel {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border-radius: 10px;
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    
+    .panel-title {
+      font-size: 1.2em;
+      font-weight: 600;
+      margin-bottom: 15px;
+      color: #3498db;
+      border-bottom: 2px solid rgba(52, 152, 219, 0.3);
+      padding-bottom: 8px;
+    }
+    
+    /* TS-590 Panel */
+    .freq-display {
+      font-size: 2.2em;
+      font-weight: bold;
+      font-family: 'Courier New', monospace;
+      text-align: center;
+      margin: 15px 0;
+      background: rgba(0,0,0,0.3);
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid rgba(52, 152, 219, 0.3);
+    }
+    
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+      font-size: 1.1em;
+    }
+    
+    .info-label {
+      color: #95a5a6;
+    }
+    
+    .info-value {
+      font-weight: bold;
+      color: #ecf0f1;
+    }
+    
+    .tx-indicator {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 15px;
+      font-weight: bold;
+      font-size: 0.95em;
+    }
+    
+    .tx-indicator.rx {
+      background: #2ecc71;
+      color: #fff;
+    }
+    
+    .tx-indicator.tx {
+      background: #e74c3c;
+      color: #fff;
+      animation: blink 1s infinite;
+    }
+    
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0.4; }
+    }
+    
+    /* Emergency Stop Button */
+    .emergency-stop {
+      margin-top: 15px;
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      border: 2px solid #c0392b;
+      color: white;
+      font-size: 1.2em;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+    }
+    
+    .emergency-stop:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(231, 76, 60, 0.6);
+    }
+    
+    .emergency-stop:active {
+      transform: translateY(0);
+    }
+    
+    /* Antenna Matrix */
+    .matrix-container {
+      margin-top: 15px;
+    }
+    
+    .matrix-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    
+    .matrix-cell {
+      background: rgba(0,0,0,0.3);
+      border: 2px solid rgba(52, 152, 219, 0.3);
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+      font-weight: bold;
+      font-size: 1.1em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .matrix-cell:hover {
+      background: rgba(52, 152, 219, 0.2);
+      border-color: #3498db;
+    }
+    
+    .matrix-cell.active {
+      background: rgba(46, 204, 113, 0.3);
+      border-color: #2ecc71;
+      box-shadow: 0 0 15px rgba(46, 204, 113, 0.5);
+    }
+    
+    .matrix-cell.empty {
+      opacity: 0.3;
+      cursor: default;
+      pointer-events: none;
+    }
+    
+    .matrix-cell.disconnect-btn {
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      border-color: #c0392b;
+      margin-top: 8px;
+      font-weight: bold;
+      color: white;
+    }
+    
+    .matrix-cell.disconnect-btn:hover {
+      background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(231, 76, 60, 0.5);
+    }
+    
+    /* Antenna Matrix Offline Overlay */
+    .matrix-overlay {
+      position: relative;
+    }
+    
+    .matrix-offline-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      z-index: 10;
+    }
+    
+    .matrix-offline-indicator.show {
+      display: flex;
+    }
+    
+    .matrix-offline-indicator .x-mark {
+      font-size: 6em;
+      color: #e74c3c;
+      font-weight: bold;
+      text-shadow: 0 0 20px rgba(231, 76, 60, 0.8);
+    }
+    
+    /* ATU Panel */
+    .atu-panel {
+      min-height: 500px;
+    }
+    
+    .tune-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin: 20px 0;
+    }
+    
+    .tune-btn {
+      background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+      border: none;
+      color: white;
+      padding: 20px 15px;
+      border-radius: 10px;
+      font-size: 1.2em;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .tune-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(52, 152, 219, 0.5);
+    }
+    
+    .tune-btn:active {
+      transform: translateY(0);
+    }
+    
+    .tune-btn .band {
+      font-size: 1.4em;
+    }
+    
+    .tune-btn .freq {
+      font-size: 0.9em;
+      opacity: 0.8;
+    }
+    
+    /* Mode Toggle */
+    .mode-toggle {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      margin: 25px 0;
+      padding: 20px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 10px;
+    }
+    
+    .mode-label {
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      width: 120px;
+      height: 50px;
+      background: rgba(149, 165, 166, 0.3);
+      border-radius: 25px;
+      cursor: pointer;
+      border: 2px solid rgba(149, 165, 166, 0.5);
+      transition: all 0.3s ease;
+    }
+    
+    .toggle-switch.auto {
+      background: rgba(46, 204, 113, 0.3);
+      border-color: #2ecc71;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 38px;
+      height: 38px;
+      background: #ecf0f1;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    
+    .toggle-switch.auto .toggle-slider {
+      transform: translateX(70px);
+      background: #2ecc71;
+    }
+    
+    /* Status Display */
+    .atu-status-row {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .atu-status {
+      display: flex;
+      align-items: center;
+      padding: 15px 20px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      font-size: 1.1em;
+      min-width: 150px;
+    }
+    
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 10px;
+      background: #2ecc71;
+      box-shadow: 0 0 10px #2ecc71;
+    }
+    
+    .status-dot.tuning {
+      background: #f39c12;
+      box-shadow: 0 0 10px #f39c12;
+      animation: pulse 1s infinite;
+    }
+    
+    /* Antenna Display */
+    .antenna-display {
+      background: rgba(0,0,0,0.3);
+      padding: 15px 20px;
+      border-radius: 8px;
+      border: 2px solid rgba(52, 152, 219, 0.3);
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+    
+    .antenna-display .label {
+      font-size: 1em;
+      color: #95a5a6;
+    }
+    
+    .antenna-display .value {
+      font-size: 1.3em;
+      font-weight: bold;
+      color: #3498db;
+    }
+    
+    .antenna-display .value.offline {
+      color: #e74c3c;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.7; }
+    }
+    
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+      
+      .tune-buttons {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    /* ATU Camera Section */
+    .atu-camera-section {
+      margin-top: 25px;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .camera-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    
+    .camera-header h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin: 0;
+      letter-spacing: 1px;
+    }
+    
+    .camera-controls {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .camera-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .camera-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+    
+    .camera-frame {
+      position: relative;
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+      aspect-ratio: 4/3;
+    }
+    
+    .camera-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    
+    .camera-offline-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 3rem;
+      gap: 10px;
+    }
+    
+    .camera-offline-overlay div:last-child {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    
+    .camera-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+    
+    .camera-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #666;
+    }
+    
+    .camera-status-dot.online {
+      background: #4ade80;
+      box-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+      animation: pulse-green 2s infinite;
+    }
+    
+    .camera-status-dot.offline {
+      background: #ef4444;
+    }
+    
+    @keyframes pulse-green {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    @media (max-width: 768px) {
+      .camera-frame {
+        max-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <h1>🔌 ATU-100 Remote Controller</h1>
+    <div class="header-info">
+      <div class="status-badge" id="connection-badge">🔴 Offline</div>
+      <div>Last Update: <span id="last-update">--:--:--</span></div>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="container">
+    <!-- Left Column -->
+    <div class="left-column">
+      <!-- TS-590 Panel -->
+      <div class="panel">
+        <div class="panel-title">📻 Kenwood TS-590</div>
+        <div class="freq-display" id="frequency">-.--- MHz</div>
+        
+        <div class="info-row">
+          <span class="info-label">SWR:</span>
+          <span class="info-value" id="swr" style="font-size: 1.4em; color: #3498db;">--</span>
+        </div>
+        
+        <div class="info-row">
+          <span class="info-label">Status:</span>
+          <span class="tx-indicator rx" id="tx-status">RX</span>
+        </div>
+        
+        <button class="emergency-stop" onclick="emergencyStop()">
+          🛑 EMERGENCY STOP TX
+        </button>
+      </div>
+      
+      <!-- Antenna Switch Panel -->
+      <div class="panel">
+        <div class="panel-title">📡 Antenna Switch</div>
+        <div class="matrix-overlay">
+          <div class="matrix-container">
+            <div class="matrix-row" style="grid-template-columns: repeat(2, 1fr);">
+              <div class="matrix-cell" data-ant="VERTICAL" onclick="selectAntenna('VERTICAL')">VERTICAL</div>
+              <div class="matrix-cell" data-ant="LONGWIRE" onclick="selectAntenna('LONGWIRE')">LONG WIRE</div>
+            </div>
+            <div class="matrix-row" style="grid-template-columns: repeat(2, 1fr);">
+              <div class="matrix-cell" data-radio="590" onclick="selectRadio('590')">590</div>
+              <div class="matrix-cell" data-radio="SDR" onclick="selectRadio('SDR')">SDR</div>
+            </div>
+            <div class="matrix-row" style="grid-template-columns: 1fr;">
+              <div class="matrix-cell disconnect-btn" onclick="disconnectAll()">🔌 DISCONNECT ALL</div>
+            </div>
+          </div>
+          <div class="matrix-offline-indicator" id="matrix-offline">
+            <div class="x-mark">✖</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Right Column - ATU Panel -->
+    <div class="panel atu-panel">
+      <div class="panel-title">🎛️ ATU-100 Extended (7×7)</div>
+      
+      <div class="atu-status-row">
+        <div class="atu-status">
+          <div class="status-dot" id="atu-status-dot"></div>
+          <span id="atu-status-text">Ready</span>
+        </div>
+        
+        <div class="antenna-display">
+          <span class="label">Current Antenna:</span>
+          <span class="value" id="current-antenna">Vertical</span>
+        </div>
+      </div>
+      
+      <div class="tune-buttons">
+        <button class="tune-btn" onclick="tuneFrequency(1830)">
+          <span class="band">TUNE 160m</span>
+          <span class="freq">1.830 MHz</span>
+        </button>
+        <button class="tune-btn" onclick="tuneFrequency(3650)">
+          <span class="band">TUNE 80m</span>
+          <span class="freq">3.650 MHz</span>
+        </button>
+        <button class="tune-btn" onclick="tuneFrequency(7100)">
+          <span class="band">TUNE 40m</span>
+          <span class="freq">7.100 MHz</span>
+        </button>
+      </div>
+      
+      <div class="mode-toggle">
+        <span class="mode-label">BYPASS</span>
+        <div class="toggle-switch" id="mode-toggle" onclick="toggleMode()">
+          <div class="toggle-slider"></div>
+        </div>
+        <span class="mode-label">AUTO</span>
+      </div>
+      
+      <!-- ATU Display Camera -->
+      <div class="atu-camera-section">
+        <div class="camera-header">
+          <h3>📹 ATU Display Live</h3>
+          <div class="camera-controls">
+            <button class="camera-btn" onclick="toggleFullscreen()" title="Fullscreen">
+              🔍
+            </button>
+            <button class="camera-btn" onclick="saveSnapshot()" title="Save Snapshot">
+              📸
+            </button>
+          </div>
+        </div>
+        <div class="camera-frame">
+          <img 
+            id="atu-camera" 
+            src="http://atupi.local:8081/stream" 
+            alt="ATU Display Camera"
+            onerror="handleCameraError(this)"
+            onload="handleCameraLoad(this)"
+          />
+          <div class="camera-offline-overlay" id="camera-offline">
+            <div>📷</div>
+            <div>Camera Offline</div>
+          </div>
+        </div>
+        <div class="camera-status" id="camera-status">
+          <span class="camera-status-dot"></span>
+          <span class="camera-status-text">Connecting...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let connected = false;
+    let currentMode = 'bypass'; // 'bypass', 'auto', or 'manual'
+    let lastSWR = '--';
+    let stationControlOnline = false;
+    let STATION_CONTROL_URL = ''; // Will be loaded from backend config
+    
+    // Load configuration from backend
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const config = await res.json();
+        STATION_CONTROL_URL = config.stationControlUrl;
+        console.log('📡 Station Control URL:', STATION_CONTROL_URL);
+      } catch (err) {
+        console.error('Failed to load config:', err);
+      }
+    }
+    
+    // Connection handling
+    socket.on('connect', () => {
+      connected = true;
+      document.getElementById('connection-badge').textContent = '🟢 Online';
+      document.getElementById('connection-badge').classList.remove('offline');
+      console.log('✅ Connected to server');
+    });
+    
+    socket.on('disconnect', () => {
+      connected = false;
+      document.getElementById('connection-badge').textContent = '🔴 Offline';
+      document.getElementById('connection-badge').classList.add('offline');
+      console.log('❌ Disconnected from server');
+    });
+    
+    // Radio updates via WebSocket
+    socket.on('update', (data) => {
+      if (data.frequency) {
+        const freqMHz = (data.frequency / 1000000).toFixed(3);
+        document.getElementById('frequency').textContent = freqMHz + ' MHz';
+      }
+      
+      if (data.mode) {
+        document.getElementById('mode').textContent = data.mode;
+      }
+      
+      if (data.txStatus) {
+        const txElem = document.getElementById('tx-status');
+        txElem.textContent = data.txStatus;
+        txElem.className = 'tx-indicator ' + data.txStatus.toLowerCase();
+      }
+      
+      // Update timestamp
+      const now = new Date();
+      document.getElementById('last-update').textContent = 
+        now.getHours().toString().padStart(2,'0') + ':' +
+        now.getMinutes().toString().padStart(2,'0') + ':' +
+        now.getSeconds().toString().padStart(2,'0');
+    });
+    
+    // Emergency Stop
+    async function emergencyStop() {
+      console.log('🚨 EMERGENCY STOP');
+      try {
+        await fetch('/api/rx', { method: 'POST' });
+        updateATUStatus();
+      } catch (err) {
+        console.error('Error:', err);
+      }
+    }
+    
+    // Tune with fixed frequency
+    async function tuneFrequency(freq) {
+      if (!confirm(`Start tuning on ${freq} kHz?\n\n⚠️ Antenna will switch to 590 (RTX HF)\n📻 Radio will transmit at low power`)) {
+        return;
+      }
+      
+      try {
+        document.getElementById('atu-status-text').textContent = 'Tuning...';
+        document.getElementById('atu-status-dot').classList.add('tuning');
+        
+        const res = await fetch('/api/tune', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frequency: freq * 1000 }) // kHz to Hz
+        });
+        
+        const data = await res.json();
+        
+        if (data.ok) {
+          if (data.swr) {
+            lastSWR = data.swr;
+            document.getElementById('swr').textContent = data.swr;
+          }
+          
+          if (data.tuned) {
+            alert(`✅ Tuning completed!\nSWR: ${data.swr || 'N/A'}`);
+          } else {
+            alert('⚠️ Tuning timeout - check antenna');
+          }
+        } else {
+          alert('❌ Error: ' + (data.error || 'Unknown'));
+        }
+      } catch (err) {
+        alert('❌ Error: ' + err.message);
+      } finally {
+        document.getElementById('atu-status-text').textContent = 'Ready';
+        document.getElementById('atu-status-dot').classList.remove('tuning');
+        updateATUStatus();
+      }
+    }
+    
+    // Toggle BYPASS/AUTO mode
+    async function toggleMode() {
+      try {
+        const res = await fetch('/api/atu/toggle-mode', { method: 'POST' });
+        const data = await res.json();
+        
+        // Update mode from response ('bypass', 'auto', or potentially 'manual')
+        currentMode = data.mode;
+        updateModeDisplay();
+        
+        // Immediately refresh full status to get accurate state
+        setTimeout(updateATUStatus, 500);
+        
+      } catch (err) {
+        console.error('Error toggling mode:', err);
+      }
+    }
+    
+    function updateModeDisplay() {
+      const toggle = document.getElementById('mode-toggle');
+      
+      // BYPASS shows toggle left, AUTO/MANUAL show toggle right
+      // (MANUAL is visually same as AUTO since toggle is binary BYPASS⟷AUTO)
+      if (currentMode === 'bypass') {
+        toggle.classList.remove('auto');
+      } else {
+        // AUTO or MANUAL → show as AUTO (toggle right)
+        toggle.classList.add('auto');
+      }
+    }
+    
+    // Update ATU status
+    async function updateATUStatus() {
+      try {
+        const res = await fetch('/api/atu/fullstatus');
+        const data = await res.json();
+        
+        // Update mode from backend (3 states)
+        if (data.bypass) {
+          currentMode = 'bypass';
+        } else if (data.auto) {
+          currentMode = 'auto';
+        } else {
+          currentMode = 'manual';  // NEW: handle MANUAL state
+        }
+        updateModeDisplay();
+        
+      } catch (err) {
+        console.error('Error updating ATU status:', err);
+      }
+    }
+    
+    // Station Control functions
+    async function checkStationControl() {
+      try {
+        const res = await fetch('/api/station/status');
+        const data = await res.json();
+        
+        stationControlOnline = data.online;
+        
+        if (stationControlOnline) {
+          // Update matrix from state
+          updateMatrixFromState(data.state);
+          document.getElementById('matrix-offline').classList.remove('show');
+        } else {
+          // Show offline overlay
+          document.getElementById('matrix-offline').classList.add('show');
+          document.getElementById('current-antenna').textContent = '✖';
+          document.getElementById('current-antenna').classList.add('offline');
+        }
+      } catch (err) {
+        stationControlOnline = false;
+        document.getElementById('matrix-offline').classList.add('show');
+        document.getElementById('current-antenna').textContent = '✖';
+        document.getElementById('current-antenna').classList.add('offline');
+      }
+    }
+    
+    function updateMatrixFromState(state) {
+      // Clear all active states
+      document.querySelectorAll('[data-ant]').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('[data-radio]').forEach(el => el.classList.remove('active'));
+      
+      // Antenna: 0=off, 1=VERTICAL, 2=LONGWIRE
+      if (state.antenna === 1) {
+        document.querySelector('[data-ant="VERTICAL"]').classList.add('active');
+        document.getElementById('current-antenna').textContent = 'Vertical';
+        document.getElementById('current-antenna').classList.remove('offline');
+      } else if (state.antenna === 2) {
+        document.querySelector('[data-ant="LONGWIRE"]').classList.add('active');
+        document.getElementById('current-antenna').textContent = 'Long Wire';
+        document.getElementById('current-antenna').classList.remove('offline');
+      } else {
+        document.getElementById('current-antenna').textContent = 'None';
+        document.getElementById('current-antenna').classList.remove('offline');
+      }
+      
+      // HF: 0=off, 1=RTX (590), 2=SDR
+      if (state.hf === 1) {
+        document.querySelector('[data-radio="590"]').classList.add('active');
+      } else if (state.hf === 2) {
+        document.querySelector('[data-radio="SDR"]').classList.add('active');
+      }
+    }
+    
+    // Antenna selection
+    async function selectAntenna(ant) {
+      if (!stationControlOnline) {
+        alert('❌ Station Control offline');
+        return;
+      }
+      
+      console.log('Selecting antenna:', ant);
+      
+      const value = (ant === 'VERTICAL') ? 1 : 2;
+      
+      try {
+        const res = await fetch('/api/station/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cmd: 'antenna', val: value })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          updateMatrixFromState(data.state);
+        }
+      } catch (err) {
+        console.error('Error selecting antenna:', err);
+        alert('❌ Error: ' + err.message);
+      }
+    }
+    
+    async function selectRadio(radio) {
+      if (!stationControlOnline) {
+        alert('❌ Station Control offline');
+        return;
+      }
+      
+      console.log('Selecting radio:', radio);
+      
+      const value = (radio === '590') ? 1 : 2;
+      
+      try {
+        const res = await fetch('/api/station/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cmd: 'hf', val: value })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          updateMatrixFromState(data.state);
+        }
+      } catch (err) {
+        console.error('Error selecting radio:', err);
+        alert('❌ Error: ' + err.message);
+      }
+    }
+    
+    async function disconnectAll() {
+      if (!stationControlOnline) {
+        alert('❌ Station Control offline');
+        return;
+      }
+      
+      if (!confirm('Disconnect all antennas and radios?')) {
+        return;
+      }
+      
+      console.log('Disconnecting all...');
+      
+      try {
+        const res = await fetch('/api/station/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cmd: 'master_off', val: 0 })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          updateMatrixFromState(data.state);
+          
+          // Clear all active states visually
+          document.querySelectorAll('[data-ant]').forEach(el => el.classList.remove('active'));
+          document.querySelectorAll('[data-radio]').forEach(el => el.classList.remove('active'));
+          document.getElementById('current-antenna').textContent = 'None';
+        }
+      } catch (err) {
+        console.error('Error disconnecting:', err);
+        alert('❌ Error: ' + err.message);
+      }
+    }
+    
+    // Keep SWR display
+    setInterval(() => {
+      if (lastSWR !== '--') {
+        document.getElementById('swr').textContent = lastSWR;
+      }
+    }, 1000);
+    
+    // Periodic status update
+    setInterval(updateATUStatus, 3000);
+    
+    // Station Control polling
+    setInterval(checkStationControl, 2000);
+    
+    // Camera functions
+    function handleCameraError(img) {
+      console.log('📷 Camera stream offline');
+      document.getElementById('camera-offline').style.display = 'flex';
+      document.getElementById('camera-status').innerHTML = 
+        '<span class="camera-status-dot offline"></span><span class="camera-status-text">Offline</span>';
+    }
+    
+    function handleCameraLoad(img) {
+      console.log('📷 Camera stream online');
+      document.getElementById('camera-offline').style.display = 'none';
+      document.getElementById('camera-status').innerHTML = 
+        '<span class="camera-status-dot online"></span><span class="camera-status-text">Live</span>';
+    }
+    
+    function toggleFullscreen() {
+      const img = document.getElementById('atu-camera');
+      if (img.requestFullscreen) {
+        img.requestFullscreen();
+      } else if (img.webkitRequestFullscreen) {
+        img.webkitRequestFullscreen();
+      } else if (img.msRequestFullscreen) {
+        img.msRequestFullscreen();
+      }
+    }
+    
+    function saveSnapshot() {
+      const img = document.getElementById('atu-camera');
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || 640;
+      canvas.height = img.naturalHeight || 480;
+      
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      
+      const link = document.createElement('a');
+      const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+      link.download = `atu-display-${timestamp}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      
+      console.log('📸 Snapshot saved');
+    }
+    
+    // Initial status
+    loadConfig().then(() => {
+      updateATUStatus();
+      checkStationControl();
+    });
+    
+    console.log('🚀 ATU Controller Interface Loaded');
+  </script>
+</body>
+</html>
