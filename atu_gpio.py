@@ -195,6 +195,20 @@ def cmd_get_state():
     
     return state
 
+def cmd_init():
+    """Inizializza stato: ATU parte sempre in AUTO all'accensione"""
+    print("🔄 Initializing ATU state...")
+    
+    # ATU-100 hardware default = AUTO mode (no symbol on display)
+    state = {
+        'auto': True,
+        'bypass': False
+    }
+    
+    save_state(state)
+    print("✅ State initialized: AUTO mode")
+    return state
+
 def cleanup():
     GPIO.cleanup()
 
@@ -219,7 +233,7 @@ if __name__ == "__main__":
         elif cmd == "state":
             cmd_get_state()
         elif cmd == "init":
-            init_state()
+            cmd_init()
         else:
             print(f"❌ Unknown command: {cmd}")
             sys.exit(1)
